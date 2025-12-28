@@ -15,6 +15,7 @@ import AIPage from '@/pages/AIPage';
 import VideosPage from '@/pages/VideosPage';
 import AnalyticsDashboard from '@/pages/AnalyticsDashboard';
 import AdminPanel from '@/pages/AdminPanel';
+import PostThreadPage from '@/pages/PostThreadPage';
 
 export default function App() {
   return (
@@ -36,6 +37,7 @@ export default function App() {
               <Route path="/videos" element={<VideosPage />} />
               <Route path="/analytics" element={<AnalyticsDashboard />} />
               <Route path="/admin" element={<AdminPanel />} />
+              <Route path="/post/:postId" element={<PostThreadPage />} />
             </Routes>
           </main>
           <BottomNav />

@@ -1,7 +1,7 @@
 import { Heart, MessageCircle, Repeat2, Share, MoreHorizontal, BadgeCheck } from 'lucide-react';
 import { Post } from '@/types';
 import { formatDistanceToNow } from 'date-fns';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
@@ -22,6 +22,39 @@ export function PostCard({ post, onUpdate }: PostCardProps) {
   const [likesCount, setLikesCount] = useState(post.likes_count);
   const [repostsCount, setRepostsCount] = useState(post.reposts_count);
 
+  // Check if user has already liked/reposted this post
+  useEffect(() => {
+    if (!user) return;
+
+    const checkUserInteractions = async () => {
+      try {
+        // Check if liked
+        const { data: likeData } = await supabase
+          .from('likes')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('post_id', post.id)
+          .maybeSingle();
+
+        setIsLiked(!!likeData);
+
+        // Check if reposted
+        const { data: repostData } = await supabase
+          .from('reposts')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('post_id', post.id)
+          .maybeSingle();
+
+        setIsReposted(!!repostData);
+      } catch (error) {
+        console.error('Error checking user interactions:', error);
+      }
+    };
+
+    checkUserInteractions();
+  }, [user, post.id]);
+
   const handleLike = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!user) {
@@ -37,8 +70,18 @@ export function PostCard({ post, onUpdate }: PostCardProps) {
 
     try {
       if (newIsLiked) {
-        await supabase.from('likes').insert({ user_id: user.id, post_id: post.id });
-        await supabase.from('posts').update({ likes_count: newCount }).eq('id', post.id);
+        const { error: insertError } = await supabase
+          .from('likes')
+          .insert({ user_id: user.id, post_id: post.id });
+        
+        if (insertError) throw insertError;
+
+        const { error: updateError } = await supabase
+          .from('posts')
+          .update({ likes_count: newCount })
+          .eq('id', post.id);
+        
+        if (updateError) throw updateError;
         
         if (post.user_id !== user.id) {
           await supabase.from('notifications').insert({
@@ -49,12 +92,29 @@ export function PostCard({ post, onUpdate }: PostCardProps) {
           });
         }
       } else {
-        await supabase.from('likes').delete().match({ user_id: user.id, post_id: post.id });
-        await supabase.from('posts').update({ likes_count: newCount }).eq('id', post.id);
+        const { error: deleteError } = await supabase
+          .from('likes')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('post_id', post.id);
+        
+        if (deleteError) throw deleteError;
+
+        const { error: updateError } = await supabase
+          .from('posts')
+          .update({ likes_count: newCount })
+          .eq('id', post.id);
+        
+        if (updateError) throw updateError;
       }
       onUpdate?.();
     } catch (error: any) {
       console.error('Like error:', error);
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to like post',
+        variant: 'destructive',
+      });
       setIsLiked(!newIsLiked);
       setLikesCount(likesCount);
     }
@@ -75,8 +135,18 @@ export function PostCard({ post, onUpdate }: PostCardProps) {
 
     try {
       if (newIsReposted) {
-        await supabase.from('reposts').insert({ user_id: user.id, post_id: post.id });
-        await supabase.from('posts').update({ reposts_count: newCount }).eq('id', post.id);
+        const { error: insertError } = await supabase
+          .from('reposts')
+          .insert({ user_id: user.id, post_id: post.id });
+        
+        if (insertError) throw insertError;
+
+        const { error: updateError } = await supabase
+          .from('posts')
+          .update({ reposts_count: newCount })
+          .eq('id', post.id);
+        
+        if (updateError) throw updateError;
         
         if (post.user_id !== user.id) {
           await supabase.from('notifications').insert({
@@ -86,20 +156,48 @@ export function PostCard({ post, onUpdate }: PostCardProps) {
             post_id: post.id,
           });
         }
+        
+        toast({ title: 'Reposted successfully' });
       } else {
-        await supabase.from('reposts').delete().match({ user_id: user.id, post_id: post.id });
-        await supabase.from('posts').update({ reposts_count: newCount }).eq('id', post.id);
+        const { error: deleteError } = await supabase
+          .from('reposts')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('post_id', post.id);
+        
+        if (deleteError) throw deleteError;
+
+        const { error: updateError } = await supabase
+          .from('posts')
+          .update({ reposts_count: newCount })
+          .eq('id', post.id);
+        
+        if (updateError) throw updateError;
+        
+        toast({ title: 'Repost removed' });
       }
       onUpdate?.();
     } catch (error: any) {
       console.error('Repost error:', error);
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to repost',
+        variant: 'destructive',
+      });
       setIsReposted(!newIsReposted);
       setRepostsCount(repostsCount);
     }
   };
 
+  const handlePostClick = () => {
+    navigate(`/post/${post.id}`);
+  };
+
   return (
-    <div className="border-b border-border p-4 hover:bg-muted/5 transition-colors cursor-pointer">
+    <div 
+      className="border-b border-border p-4 hover:bg-muted/5 transition-colors cursor-pointer"
+      onClick={handlePostClick}
+    >
       <div className="flex space-x-3">
         <div 
           className="w-10 h-10 rounded-full bg-muted flex-shrink-0 overflow-hidden cursor-pointer"
@@ -172,7 +270,10 @@ export function PostCard({ post, onUpdate }: PostCardProps) {
           <div className="flex justify-between mt-3 max-w-md">
             <button 
               className="flex items-center space-x-2 text-muted-foreground hover:text-primary transition-colors group"
-              onClick={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate(`/post/${post.id}`);
+              }}
             >
               <div className="p-2 rounded-full group-hover:bg-primary/10 transition-colors">
                 <MessageCircle className="w-5 h-5" />
