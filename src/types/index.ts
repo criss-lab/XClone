@@ -22,6 +22,9 @@ export interface Post {
   user_id: string;
   content: string;
   image_url?: string;
+  video_url?: string;
+  is_video: boolean;
+  views_count: number;
   likes_count: number;
   reposts_count: number;
   replies_count: number;

@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Image, Loader2, X } from 'lucide-react';
+import { Image, Video, Loader2, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface ComposePostProps {
@@ -16,6 +16,7 @@ export function ComposePost({ onSuccess }: ComposePostProps) {
   const navigate = useNavigate();
   const [content, setContent] = useState('');
   const [image, setImage] = useState<File | null>(null);
+  const [video, setVideo] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
@@ -42,16 +43,35 @@ export function ComposePost({ onSuccess }: ComposePostProps) {
         return;
       }
       setImage(file);
+      setVideo(null);
+    }
+  };
+
+  const handleVideoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files?.[0]) {
+      const file = e.target.files[0];
+      if (file.size > 50 * 1024 * 1024) {
+        toast({
+          title: 'Error',
+          description: 'Video must be less than 50MB',
+          variant: 'destructive',
+        });
+        return;
+      }
+      setVideo(file);
+      setImage(null);
     }
   };
 
   const handlePost = async () => {
-    if (!content.trim() && !image) return;
+    if (!content.trim() && !image && !video) return;
 
     setLoading(true);
 
     try {
       let imageUrl = null;
+      let videoUrl = null;
+      let isVideo = false;
 
       if (image) {
         const fileExt = image.name.split('.').pop();
@@ -73,16 +93,40 @@ export function ComposePost({ onSuccess }: ComposePostProps) {
         imageUrl = publicUrl;
       }
 
+      if (video) {
+        const fileExt = video.name.split('.').pop();
+        const fileName = `${user.id}/${Date.now()}.${fileExt}`;
+        
+        const { error: uploadError } = await supabase.storage
+          .from('posts')
+          .upload(fileName, video, {
+            cacheControl: '3600',
+            upsert: false,
+          });
+
+        if (uploadError) throw uploadError;
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('posts')
+          .getPublicUrl(fileName);
+
+        videoUrl = publicUrl;
+        isVideo = true;
+      }
+
       const { error } = await supabase.from('posts').insert({
         user_id: user.id,
         content: content.trim(),
         image_url: imageUrl,
+        video_url: videoUrl,
+        is_video: isVideo,
       });
 
       if (error) throw error;
 
       setContent('');
       setImage(null);
+      setVideo(null);
       toast({ title: 'Success', description: 'Post created successfully' });
       onSuccess?.();
     } catch (error: any) {
@@ -135,6 +179,21 @@ export function ComposePost({ onSuccess }: ComposePostProps) {
               </button>
             </div>
           )}
+          {video && (
+            <div className="mt-2 relative rounded-2xl overflow-hidden">
+              <video
+                src={URL.createObjectURL(video)}
+                controls
+                className="max-h-96 w-full"
+              />
+              <button
+                onClick={() => setVideo(null)}
+                className="absolute top-2 right-2 bg-black/80 hover:bg-black text-white rounded-full w-8 h-8 flex items-center justify-center transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
           <div className="flex items-center justify-between mt-3 pt-3 border-t border-border">
             <div className="flex space-x-2">
               <label className="cursor-pointer p-2 hover:bg-primary/10 rounded-full text-primary transition-colors">
@@ -144,7 +203,17 @@ export function ComposePost({ onSuccess }: ComposePostProps) {
                   accept="image/*"
                   className="hidden"
                   onChange={handleImageChange}
-                  disabled={loading}
+                  disabled={loading || !!video}
+                />
+              </label>
+              <label className="cursor-pointer p-2 hover:bg-primary/10 rounded-full text-primary transition-colors">
+                <Video className="w-5 h-5" />
+                <input
+                  type="file"
+                  accept="video/*"
+                  className="hidden"
+                  onChange={handleVideoChange}
+                  disabled={loading || !!image}
                 />
               </label>
             </div>
@@ -156,7 +225,7 @@ export function ComposePost({ onSuccess }: ComposePostProps) {
               )}
               <Button
                 onClick={handlePost}
-                disabled={loading || (!content.trim() && !image) || content.length > 280}
+                disabled={loading || (!content.trim() && !image && !video) || content.length > 280}
                 className="rounded-full px-6 font-semibold"
               >
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Post'}

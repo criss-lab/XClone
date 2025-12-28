@@ -12,6 +12,9 @@ import SearchPage from '@/pages/SearchPage';
 import AuthPage from '@/pages/AuthPage';
 import SpacesPage from '@/pages/SpacesPage';
 import AIPage from '@/pages/AIPage';
+import VideosPage from '@/pages/VideosPage';
+import AnalyticsDashboard from '@/pages/AnalyticsDashboard';
+import AdminPanel from '@/pages/AdminPanel';
 
 export default function App() {
   return (
@@ -30,6 +33,9 @@ export default function App() {
               <Route path="/search" element={<SearchPage />} />
               <Route path="/auth" element={<AuthPage />} />
               <Route path="/ai" element={<AIPage />} />
+              <Route path="/videos" element={<VideosPage />} />
+              <Route path="/analytics" element={<AnalyticsDashboard />} />
+              <Route path="/admin" element={<AdminPanel />} />
             </Routes>
           </main>
           <BottomNav />
