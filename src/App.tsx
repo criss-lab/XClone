@@ -18,6 +18,7 @@ import AdminPanel from '@/pages/AdminPanel';
 import PostThreadPage from '@/pages/PostThreadPage';
 import CommunitiesPage from '@/pages/CommunitiesPage';
 import CommunityPage from '@/pages/CommunityPage';
+import HashtagPage from '@/pages/HashtagPage';
 
 export default function App() {
   return (
@@ -42,6 +43,7 @@ export default function App() {
               <Route path="/post/:postId" element={<PostThreadPage />} />
               <Route path="/communities" element={<CommunitiesPage />} />
               <Route path="/c/:name" element={<CommunityPage />} />
+              <Route path="/hashtag/:tag" element={<HashtagPage />} />
             </Routes>
           </main>
           <BottomNav />

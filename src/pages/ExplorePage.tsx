@@ -54,7 +54,7 @@ export default function ExplorePage() {
             <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-muted-foreground" />
             <Input
               type="text"
-              placeholder="Search X"
+              placeholder="Search T"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-12 h-11 rounded-full bg-muted border-0 focus-visible:ring-2 focus-visible:ring-primary"
@@ -82,7 +82,17 @@ export default function ExplorePage() {
       <div className="divide-y divide-border">
         {filteredTrending.length > 0 ? (
           filteredTrending.map((topic, index) => (
-            <div key={topic.id} className="p-4 hover:bg-muted/5 cursor-pointer transition-colors">
+            <div 
+              key={topic.id} 
+              className="p-4 hover:bg-muted/5 cursor-pointer transition-colors"
+              onClick={() => {
+                if (topic.topic.startsWith('#')) {
+                  navigate(`/hashtag/${topic.topic.substring(1)}`);
+                } else {
+                  navigate(`/search?q=${encodeURIComponent(topic.topic)}`);
+                }
+              }}
+            >
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <div className="flex items-center space-x-2 text-muted-foreground text-sm">
