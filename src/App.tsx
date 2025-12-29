@@ -1,7 +1,9 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from '@/components/layout/AuthProvider';
 import { Sidebar } from '@/components/layout/Sidebar';
+import { RightSidebar } from '@/components/layout/RightSidebar';
 import { BottomNav } from '@/components/layout/BottomNav';
+import { FloatingActionButton } from '@/components/layout/FloatingActionButton';
 import { Toaster } from '@/components/ui/toaster';
 import HomePage from '@/pages/HomePage';
 import ExplorePage from '@/pages/ExplorePage';
@@ -26,7 +28,7 @@ export default function App() {
       <AuthProvider>
         <div className="flex min-h-screen bg-background">
           <Sidebar />
-          <main className="flex-1 max-w-2xl mx-auto w-full border-x border-border">
+          <main className="flex-1 max-w-2xl w-full border-x border-border">
             <Routes>
               <Route path="/" element={<HomePage />} />
               <Route path="/explore" element={<ExplorePage />} />
@@ -46,7 +48,9 @@ export default function App() {
               <Route path="/hashtag/:tag" element={<HashtagPage />} />
             </Routes>
           </main>
+          <RightSidebar />
           <BottomNav />
+          <FloatingActionButton />
         </div>
         <Toaster />
       </AuthProvider>
