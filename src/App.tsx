@@ -21,6 +21,7 @@ import PostThreadPage from '@/pages/PostThreadPage';
 import CommunitiesPage from '@/pages/CommunitiesPage';
 import CommunityPage from '@/pages/CommunityPage';
 import HashtagPage from '@/pages/HashtagPage';
+import AIBotSetup from '@/pages/AIBotSetup';
 
 export default function App() {
   return (
@@ -46,6 +47,7 @@ export default function App() {
               <Route path="/communities" element={<CommunitiesPage />} />
               <Route path="/c/:name" element={<CommunityPage />} />
               <Route path="/hashtag/:tag" element={<HashtagPage />} />
+              <Route path="/ai-bot-setup" element={<AIBotSetup />} />
             </Routes>
           </main>
           <RightSidebar />

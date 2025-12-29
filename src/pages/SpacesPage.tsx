@@ -8,12 +8,17 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { formatDistanceToNow } from 'date-fns';
 import { formatNumber } from '@/lib/utils';
+import { StartSpaceDialog } from '@/components/features/StartSpaceDialog';
+import { JoinSpaceDialog } from '@/components/features/JoinSpaceDialog';
 
 export default function SpacesPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showStartDialog, setShowStartDialog] = useState(false);
+  const [showJoinDialog, setShowJoinDialog] = useState(false);
+  const [selectedSpaceId, setSelectedSpaceId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchSpaces();
@@ -58,7 +63,11 @@ export default function SpacesPage() {
             <p className="text-muted-foreground">Join live conversations</p>
           </div>
           {user && (
-            <Button className="rounded-full" size="lg">
+            <Button 
+              className="rounded-full" 
+              size="lg"
+              onClick={() => setShowStartDialog(true)}
+            >
               <Radio className="w-5 h-5 mr-2" />
               Start Space
             </Button>
@@ -75,7 +84,11 @@ export default function SpacesPage() {
               Check back later for live audio conversations
             </p>
             {user && (
-              <Button className="rounded-full" size="lg">
+              <Button 
+                className="rounded-full" 
+                size="lg"
+                onClick={() => setShowStartDialog(true)}
+              >
                 <Radio className="w-5 h-5 mr-2" />
                 Be the first to start a Space
               </Button>
@@ -86,7 +99,7 @@ export default function SpacesPage() {
             {spaces.map((space) => (
               <div
                 key={space.id}
-                className="border border-border rounded-2xl p-6 hover:bg-muted/5 cursor-pointer transition-colors"
+                className="border border-border rounded-2xl p-6 hover:bg-muted/5 transition-colors"
               >
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center space-x-2 text-sm text-muted-foreground">
@@ -126,7 +139,13 @@ export default function SpacesPage() {
                     </div>
                   </div>
 
-                  <Button className="rounded-full">
+                  <Button 
+                    className="rounded-full"
+                    onClick={() => {
+                      setSelectedSpaceId(space.id);
+                      setShowJoinDialog(true);
+                    }}
+                  >
                     <Mic className="w-4 h-4 mr-2" />
                     Join
                   </Button>
@@ -157,6 +176,18 @@ export default function SpacesPage() {
           </div>
         </div>
       </div>
+
+      <StartSpaceDialog
+        open={showStartDialog}
+        onOpenChange={setShowStartDialog}
+        onSuccess={fetchSpaces}
+      />
+
+      <JoinSpaceDialog
+        open={showJoinDialog}
+        onOpenChange={setShowJoinDialog}
+        spaceId={selectedSpaceId}
+      />
     </div>
   );
 }
