@@ -3,7 +3,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Home, Search, Bell, Mail, User, Hash, Radio, LogOut, Plus, Users, TrendingUp, Sparkles } from 'lucide-react';
 import { authService } from '@/lib/auth';
-import { useState, useEffect } from '';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 
 interface Community {
