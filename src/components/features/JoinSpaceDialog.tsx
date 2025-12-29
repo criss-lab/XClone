@@ -9,8 +9,9 @@ import { Button } from '@/components/ui/button';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
-import { Radio, Mic, MicOff, Users, X, Loader2 } from 'lucide-react';
+import { Radio, Mic, MicOff, Users, X, Loader2, Headphones } from 'lucide-react';
 import { formatNumber } from '@/lib/utils';
+import { AudioRecorder } from './AudioRecorder';
 
 interface JoinSpaceDialogProps {
   open: boolean;
@@ -270,6 +271,24 @@ export function JoinSpaceDialog({ open, onOpenChange, spaceId }: JoinSpaceDialog
                     </p>
                   </div>
                 </div>
+
+                {role === 'speaker' && (
+                  <div className="border border-border rounded-lg p-4 bg-background">
+                    <p className="text-sm font-semibold mb-3 flex items-center">
+                      <Headphones className="w-4 h-4 mr-2" />
+                      Record Audio for Replay
+                    </p>
+                    <AudioRecorder 
+                      spaceId={spaceId!} 
+                      onRecordingComplete={(url) => {
+                        toast({
+                          title: 'Recording saved',
+                          description: 'Your audio has been saved for 24 hours',
+                        });
+                      }}
+                    />
+                  </div>
+                )}
 
                 <div className="flex items-center space-x-2">
                   {role === 'speaker' && (

@@ -7,6 +7,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import { cn, parseContent, formatNumber } from '@/lib/utils';
+import { SharePostDialog } from './SharePostDialog';
 
 interface PostCardProps {
   post: Post;
@@ -21,6 +22,7 @@ export function PostCard({ post, onUpdate }: PostCardProps) {
   const [isReposted, setIsReposted] = useState(false);
   const [likesCount, setLikesCount] = useState(post.likes_count);
   const [repostsCount, setRepostsCount] = useState(post.reposts_count);
+  const [showShareDialog, setShowShareDialog] = useState(false);
 
   // Check if user has already liked/reposted this post
   useEffect(() => {
@@ -309,7 +311,10 @@ export function PostCard({ post, onUpdate }: PostCardProps) {
 
             <button 
               className="flex items-center space-x-2 text-muted-foreground hover:text-primary transition-colors group"
-              onClick={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowShareDialog(true);
+              }}
             >
               <div className="p-2 rounded-full group-hover:bg-primary/10 transition-colors">
                 <Share className="w-5 h-5" />
@@ -318,6 +323,12 @@ export function PostCard({ post, onUpdate }: PostCardProps) {
           </div>
         </div>
       </div>
+
+      <SharePostDialog
+        open={showShareDialog}
+        onOpenChange={setShowShareDialog}
+        post={post}
+      />
     </div>
   );
 }

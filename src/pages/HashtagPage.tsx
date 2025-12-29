@@ -2,83 +2,144 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { TopBar } from '@/components/layout/TopBar';
 import { PostCard } from '@/components/features/PostCard';
+import { Button } from '@/components/ui/button';
 import { supabase } from '@/lib/supabase';
 import { Post } from '@/types';
-import { Loader2, Hash, TrendingUp } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
+import { Loader2, TrendingUp, Check } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 import { formatNumber } from '@/lib/utils';
+import { useNavigate } from 'react-router-dom';
 
 export default function HashtagPage() {
-  const { tag } = useParams<{ tag: string }>();
+  const { tag } = useParams();
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const { toast } = useToast();
   const [posts, setPosts] = useState<Post[]>([]);
+  const [hashtag, setHashtag] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [hashtagInfo, setHashtagInfo] = useState<any>(null);
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [followLoading, setFollowLoading] = useState(false);
 
   useEffect(() => {
     if (tag) {
-      fetchHashtagInfo();
-      fetchPosts();
+      fetchHashtagAndPosts();
+      if (user) {
+        checkFollowStatus();
+      }
     }
-  }, [tag]);
+  }, [tag, user]);
 
-  const fetchHashtagInfo = async () => {
-    if (!tag) return;
-
+  const fetchHashtagAndPosts = async () => {
     try {
-      const { data } = await supabase
+      // Fetch hashtag info
+      const { data: hashtagData, error: hashtagError } = await supabase
         .from('hashtags')
         .select('*')
-        .eq('tag', tag.toLowerCase())
+        .eq('tag', tag?.toLowerCase())
         .single();
 
-      setHashtagInfo(data);
+      if (hashtagError) throw hashtagError;
+      setHashtag(hashtagData);
+
+      // Fetch posts with this hashtag
+      const { data: postsData, error: postsError } = await supabase
+        .from('post_hashtags')
+        .select(`
+          post_id,
+          posts (
+            *,
+            user_profiles (*)
+          )
+        `)
+        .eq('hashtag_id', hashtagData.id)
+        .order('created_at', { ascending: false });
+
+      if (postsError) throw postsError;
+      
+      const formattedPosts = (postsData || [])
+        .map((item: any) => item.posts)
+        .filter(Boolean);
+      
+      setPosts(formattedPosts);
     } catch (error) {
-      console.error('Error fetching hashtag info:', error);
+      console.error('Error fetching hashtag data:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load hashtag',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
-  const fetchPosts = async () => {
-    if (!tag) return;
+  const checkFollowStatus = async () => {
+    if (!user || !hashtag) return;
 
     try {
-      // First get the hashtag ID
-      const { data: hashtagData } = await supabase
-        .from('hashtags')
+      const { data } = await supabase
+        .from('hashtag_follows')
         .select('id')
-        .eq('tag', tag.toLowerCase())
-        .single();
+        .eq('user_id', user.id)
+        .eq('hashtag_id', hashtag.id)
+        .maybeSingle();
 
-      if (!hashtagData) {
-        setLoading(false);
-        return;
-      }
-
-      // Get posts with this hashtag
-      const { data: postHashtags } = await supabase
-        .from('post_hashtags')
-        .select('post_id')
-        .eq('hashtag_id', hashtagData.id);
-
-      if (!postHashtags || postHashtags.length === 0) {
-        setLoading(false);
-        return;
-      }
-
-      const postIds = postHashtags.map(ph => ph.post_id);
-
-      const { data: postsData } = await supabase
-        .from('posts')
-        .select(`
-          *,
-          user_profiles (*)
-        `)
-        .in('id', postIds)
-        .order('created_at', { ascending: false });
-
-      setPosts(postsData || []);
+      setIsFollowing(!!data);
     } catch (error) {
-      console.error('Error fetching posts:', error);
+      console.error('Error checking follow status:', error);
+    }
+  };
+
+  const handleFollow = async () => {
+    if (!user) {
+      navigate('/auth');
+      return;
+    }
+
+    if (!hashtag) return;
+
+    setFollowLoading(true);
+
+    try {
+      if (isFollowing) {
+        // Unfollow
+        await supabase
+          .from('hashtag_follows')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('hashtag_id', hashtag.id);
+
+        setIsFollowing(false);
+        toast({
+          title: 'Unfollowed',
+          description: `You unfollowed #${tag}`,
+        });
+      } else {
+        // Follow
+        await supabase
+          .from('hashtag_follows')
+          .insert({
+            user_id: user.id,
+            hashtag_id: hashtag.id,
+          });
+
+        setIsFollowing(true);
+        toast({
+          title: 'Following',
+          description: `You'll see posts with #${tag} in your feed`,
+        });
+      }
+    } catch (error: any) {
+      console.error('Error toggling hashtag follow:', error);
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to update follow status',
+        variant: 'destructive',
+      });
     } finally {
-      setLoading(false);
+      setFollowLoading(false);
     }
   };
 
@@ -90,41 +151,72 @@ export default function HashtagPage() {
     );
   }
 
+  if (!hashtag) {
+    return (
+      <div className="min-h-screen bg-background">
+        <TopBar title={`#${tag}`} showBack />
+        <div className="text-center py-12 text-muted-foreground">
+          <p>Hashtag not found</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background pb-16 md:pb-0">
       <TopBar title={`#${tag}`} showBack />
 
       {/* Hashtag Header */}
-      <div className="border-b border-border p-6">
-        <div className="flex items-start space-x-4">
-          <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
-            <Hash className="w-8 h-8 text-primary" />
-          </div>
+      <div className="border-b border-border p-6 bg-gradient-to-br from-primary/10 to-primary/5">
+        <div className="flex items-start justify-between">
           <div className="flex-1">
-            <h1 className="text-3xl font-bold">#{tag}</h1>
-            {hashtagInfo && (
-              <div className="flex items-center space-x-4 mt-2 text-muted-foreground">
-                <div className="flex items-center space-x-1">
-                  <TrendingUp className="w-4 h-4" />
-                  <span className="text-sm">{formatNumber(hashtagInfo.usage_count)} posts</span>
-                </div>
-              </div>
-            )}
+            <div className="flex items-center space-x-2 mb-2">
+              <TrendingUp className="w-6 h-6 text-primary" />
+              <h1 className="text-3xl font-bold">#{tag}</h1>
+            </div>
+            <p className="text-muted-foreground mb-4">
+              {formatNumber(hashtag.usage_count)} posts
+            </p>
           </div>
+          {user && (
+            <Button
+              onClick={handleFollow}
+              variant={isFollowing ? 'outline' : 'default'}
+              className="rounded-full px-6"
+              disabled={followLoading}
+            >
+              {followLoading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : isFollowing ? (
+                <>
+                  <Check className="w-4 h-4 mr-2" />
+                  Following
+                </>
+              ) : (
+                'Follow'
+              )}
+            </Button>
+          )}
         </div>
+
+        {isFollowing && (
+          <div className="mt-4 p-3 bg-primary/10 border border-primary/20 rounded-lg">
+            <p className="text-sm text-foreground">
+              ✓ You're following this hashtag. Posts with #{tag} will appear in your feed.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Posts */}
       <div>
         {posts.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground">
-            <Hash className="w-12 h-12 mx-auto mb-4 opacity-50" />
-            <p className="text-lg font-semibold mb-2">No posts found</p>
-            <p className="text-sm">Be the first to use #{tag}</p>
+            <p>No posts found with this hashtag</p>
           </div>
         ) : (
           posts.map((post) => (
-            <PostCard key={post.id} post={post} onUpdate={fetchPosts} />
+            <PostCard key={post.id} post={post} onUpdate={fetchHashtagAndPosts} />
           ))
         )}
       </div>

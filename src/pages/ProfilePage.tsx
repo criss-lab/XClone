@@ -46,13 +46,23 @@ export default function ProfilePage() {
 
   const fetchProfile = async () => {
     try {
+      // Clean the username - remove @ if present
+      const cleanUsername = username?.replace('@', '').toLowerCase();
+      
       const { data: profileData, error: profileError } = await supabase
         .from('user_profiles')
         .select('*')
-        .eq('username', username)
-        .single();
+        .ilike('username', cleanUsername)
+        .maybeSingle();
 
       if (profileError) throw profileError;
+      
+      if (!profileData) {
+        setProfile(null);
+        setLoading(false);
+        return;
+      }
+      
       setProfile(profileData);
 
       if (user && user.id !== profileData.id) {

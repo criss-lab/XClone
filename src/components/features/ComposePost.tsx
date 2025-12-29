@@ -164,7 +164,7 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
             value={content}
             onChange={(e) => setContent(e.target.value)}
             className="min-h-[80px] border-0 resize-none focus-visible:ring-0 p-0 text-lg bg-transparent"
-            maxLength={280}
+            maxLength={700}
           />
           {image && (
             <div className="mt-2 relative rounded-2xl overflow-hidden">
@@ -221,13 +221,13 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
             </div>
             <div className="flex items-center space-x-3">
               {content.length > 0 && (
-                <span className={`text-sm ${content.length > 260 ? 'text-destructive' : 'text-muted-foreground'}`}>
-                  {content.length}/280
+                <span className={`text-sm ${content.length > 680 ? 'text-destructive' : 'text-muted-foreground'}`}>
+                  {content.length}/700
                 </span>
               )}
               <Button
                 onClick={handlePost}
-                disabled={loading || (!content.trim() && !image && !video) || content.length > 280}
+                disabled={loading || (!content.trim() && !image && !video) || content.length > 700}
                 className="rounded-full px-6 font-semibold"
               >
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Post'}

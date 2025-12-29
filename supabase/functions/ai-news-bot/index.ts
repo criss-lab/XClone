@@ -6,9 +6,6 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
 const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-// AI Bot User ID - you'll need to create this user first
-const AI_BOT_USER_ID = 'ai-news-bot-id'; // Replace with actual user ID after creation
-
 interface NewsArticle {
   title: string;
   description: string;
@@ -17,7 +14,7 @@ interface NewsArticle {
   publishedAt: string;
 }
 
-// Fetch news from News API (you'll need to add NEWS_API_KEY to secrets)
+// Fetch news from News API
 async function fetchNews(): Promise<NewsArticle[]> {
   const NEWS_API_KEY = Deno.env.get('NEWS_API_KEY');
   
@@ -75,7 +72,7 @@ async function createNewsPost(article: NewsArticle, botUserId: string) {
     .from('posts')
     .insert({
       user_id: botUserId,
-      content: content.substring(0, 500), // Limit to 500 chars
+      content: content.substring(0, 700), // Limit to 700 chars
       created_at: new Date().toISOString(),
     })
     .select()
@@ -101,16 +98,13 @@ async function getOrCreateAIBot() {
     return existingProfile.id;
   }
 
-  // If bot doesn't exist, create it
-  // Note: You'll need to create this user manually through Supabase Auth first
-  // or use the admin API to create the auth user
+  // Create AI bot user
   const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
     email: 'newsai@tsocial.app',
     email_confirm: true,
     user_metadata: {
       username: 'NewsAI',
       avatar_url: 'https://api.dicebear.com/7.x/bottts/svg?seed=NewsAI',
-      verified: true,
     },
   });
 
@@ -119,27 +113,23 @@ async function getOrCreateAIBot() {
     throw authError;
   }
 
-  // The user_profile should be created automatically by the trigger
-  // Wait a bit for the trigger to complete
+  // Wait for trigger to create profile
   await new Promise(resolve => setTimeout(resolve, 1000));
 
-  const { data: newProfile } = await supabaseAdmin
+  // Update profile to mark as verified
+  const { error: updateError } = await supabaseAdmin
     .from('user_profiles')
-    .select('id')
-    .eq('id', authUser.user.id)
-    .single();
+    .update({ 
+      verified: true,
+      bio: '🤖 AI-powered news bot bringing you breaking news and trending topics 24/7. Verified news from trusted sources.'
+    })
+    .eq('id', authUser.user.id);
 
-  if (!newProfile) {
-    throw new Error('Failed to create AI bot profile');
+  if (updateError) {
+    console.error('Error updating profile:', updateError);
   }
 
-  // Update profile to mark as verified
-  await supabaseAdmin
-    .from('user_profiles')
-    .update({ verified: true })
-    .eq('id', newProfile.id);
-
-  return newProfile.id;
+  return authUser.user.id;
 }
 
 Deno.serve(async (req) => {
@@ -159,7 +149,7 @@ Deno.serve(async (req) => {
     const articles = await fetchNews();
     console.log(`Fetched ${articles.length} news articles`);
 
-    // Create a post for the first article (you can modify to post multiple)
+    // Create a post for the first article
     const article = articles[0];
     const post = await createNewsPost(article, botUserId);
 
