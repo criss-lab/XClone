@@ -9,9 +9,10 @@ import { useToast } from '@/hooks/use-toast';
 
 interface ComposePostProps {
   onSuccess?: () => void;
+  communityId?: string;
 }
 
-export function ComposePost({ onSuccess }: ComposePostProps) {
+export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [content, setContent] = useState('');
@@ -50,10 +51,10 @@ export function ComposePost({ onSuccess }: ComposePostProps) {
   const handleVideoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files?.[0]) {
       const file = e.target.files[0];
-      if (file.size > 50 * 1024 * 1024) {
+      if (file.size > 10 * 1024 * 1024) {
         toast({
           title: 'Error',
-          description: 'Video must be less than 50MB',
+          description: 'Video must be less than 10MB',
           variant: 'destructive',
         });
         return;
@@ -120,6 +121,7 @@ export function ComposePost({ onSuccess }: ComposePostProps) {
         image_url: imageUrl,
         video_url: videoUrl,
         is_video: isVideo,
+        community_id: communityId || null,
       });
 
       if (error) throw error;

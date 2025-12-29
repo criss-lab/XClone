@@ -16,6 +16,8 @@ import VideosPage from '@/pages/VideosPage';
 import AnalyticsDashboard from '@/pages/AnalyticsDashboard';
 import AdminPanel from '@/pages/AdminPanel';
 import PostThreadPage from '@/pages/PostThreadPage';
+import CommunitiesPage from '@/pages/CommunitiesPage';
+import CommunityPage from '@/pages/CommunityPage';
 
 export default function App() {
   return (
@@ -38,6 +40,8 @@ export default function App() {
               <Route path="/analytics" element={<AnalyticsDashboard />} />
               <Route path="/admin" element={<AdminPanel />} />
               <Route path="/post/:postId" element={<PostThreadPage />} />
+              <Route path="/communities" element={<CommunitiesPage />} />
+              <Route path="/c/:name" element={<CommunityPage />} />
             </Routes>
           </main>
           <BottomNav />
