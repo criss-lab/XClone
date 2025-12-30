@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { TopBar } from '@/components/layout/TopBar';
 import { supabase } from '@/lib/supabase';
 import { Space } from '@/types';
-import { Radio, Users, Mic, MicOff, Loader2 } from 'lucide-react';
+import { Radio, Users, Mic, MicOff, Loader2, Headphones } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,8 @@ import { formatDistanceToNow } from 'date-fns';
 import { formatNumber } from '@/lib/utils';
 import { StartSpaceDialog } from '@/components/features/StartSpaceDialog';
 import { JoinSpaceDialog } from '@/components/features/JoinSpaceDialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { SpaceRecordingsPlaylist } from '@/components/features/SpaceRecordingsPlaylist';
 
 export default function SpacesPage() {
   const { user } = useAuth();
@@ -19,9 +21,12 @@ export default function SpacesPage() {
   const [showStartDialog, setShowStartDialog] = useState(false);
   const [showJoinDialog, setShowJoinDialog] = useState(false);
   const [selectedSpaceId, setSelectedSpaceId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'live' | 'recordings'>('live');
+  const [allRecordings, setAllRecordings] = useState<any[]>([]);
 
   useEffect(() => {
     fetchSpaces();
+    fetchAllRecordings();
   }, []);
 
   const fetchSpaces = async () => {
@@ -44,6 +49,29 @@ export default function SpacesPage() {
     }
   };
 
+  const fetchAllRecordings = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('space_recordings')
+        .select(`
+          *,
+          user_profiles (*),
+          spaces (
+            title,
+            description,
+            host:user_profiles!spaces_host_id_fkey(*)
+          )
+        `)
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      if (error) throw error;
+      setAllRecordings(data || []);
+    } catch (error) {
+      console.error('Error fetching recordings:', error);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -60,7 +88,7 @@ export default function SpacesPage() {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h2 className="text-2xl font-bold">Audio Spaces</h2>
-            <p className="text-muted-foreground">Join live conversations</p>
+            <p className="text-muted-foreground">Live conversations & recordings</p>
           </div>
           {user && (
             <Button 
@@ -74,6 +102,20 @@ export default function SpacesPage() {
           )}
         </div>
 
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'live' | 'recordings')} className="mb-6">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="live">
+              <Radio className="w-4 h-4 mr-2" />
+              Live Now
+            </TabsTrigger>
+            <TabsTrigger value="recordings">
+              <Headphones className="w-4 h-4 mr-2" />
+              Recordings
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+
+        <TabsContent value="live" className="mt-0">
         {spaces.length === 0 ? (
           <div className="text-center py-12">
             <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
@@ -154,6 +196,58 @@ export default function SpacesPage() {
             ))}
           </div>
         )}
+        </TabsContent>
+
+        <TabsContent value="recordings" className="mt-0">
+          {allRecordings.length === 0 ? (
+            <div className="text-center py-12">
+              <div className="w-20 h-20 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
+                <Headphones className="w-10 h-10 text-muted-foreground" />
+              </div>
+              <h3 className="text-xl font-bold mb-2">No recordings yet</h3>
+              <p className="text-muted-foreground">
+                Recorded spaces will appear here for playback
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {allRecordings.map((recording) => (
+                <div
+                  key={recording.id}
+                  className="border border-border rounded-lg p-4 hover:bg-muted/5 transition-colors"
+                >
+                  <div className="flex items-start space-x-3 mb-3">
+                    <div className="w-10 h-10 rounded-full bg-muted overflow-hidden flex-shrink-0">
+                      {recording.user_profiles?.avatar_url ? (
+                        <img
+                          src={recording.user_profiles.avatar_url}
+                          alt={recording.user_profiles.username}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center font-bold">
+                          {recording.user_profiles?.username[0]?.toUpperCase()}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="font-semibold">{recording.spaces?.title}</h4>
+                      <p className="text-sm text-muted-foreground">
+                        by {recording.user_profiles?.username} • {formatDistanceToNow(new Date(recording.created_at), { addSuffix: true })}
+                      </p>
+                    </div>
+                  </div>
+                  <audio
+                    controls
+                    src={recording.audio_url}
+                    className="w-full"
+                    controlsList="nodownload"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+        </TabsContent>
       </div>
 
       <div className="border-t border-border p-6 mt-8 bg-muted/20">

@@ -11,7 +11,9 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { Radio, Mic, MicOff, Users, X, Loader2, Headphones } from 'lucide-react';
 import { formatNumber } from '@/lib/utils';
-import { AudioRecorder } from './AudioRecorder';
+import { LiveAudioBroadcaster } from './LiveAudioBroadcaster';
+import { LiveAudioPlayer } from './LiveAudioPlayer';
+import { SpaceRecordingsPlaylist } from './SpaceRecordingsPlaylist';
 
 interface JoinSpaceDialogProps {
   open: boolean;
@@ -272,23 +274,24 @@ export function JoinSpaceDialog({ open, onOpenChange, spaceId }: JoinSpaceDialog
                   </div>
                 </div>
 
-                {role === 'speaker' && (
-                  <div className="border border-border rounded-lg p-4 bg-background">
-                    <p className="text-sm font-semibold mb-3 flex items-center">
-                      <Headphones className="w-4 h-4 mr-2" />
-                      Record Audio for Replay
-                    </p>
-                    <AudioRecorder 
-                      spaceId={spaceId!} 
-                      onRecordingComplete={(url) => {
-                        toast({
-                          title: 'Recording saved',
-                          description: 'Your audio has been saved for 24 hours',
-                        });
-                      }}
-                    />
-                  </div>
+                {/* Live Audio Broadcasting (Host Only) */}
+                {space.host?.id === user?.id && (
+                  <LiveAudioBroadcaster
+                    spaceId={spaceId!}
+                    isHost={space.host?.id === user?.id}
+                  />
                 )}
+
+                {/* Live Audio Player (All Participants) */}
+                <LiveAudioPlayer
+                  spaceId={spaceId!}
+                  isLive={space.is_live}
+                />
+
+                {/* Recordings Playlist */}
+                <div className="border border-border rounded-lg p-4 bg-background">
+                  <SpaceRecordingsPlaylist spaceId={spaceId!} />
+                </div>
 
                 <div className="flex items-center space-x-2">
                   {role === 'speaker' && (
@@ -320,7 +323,7 @@ export function JoinSpaceDialog({ open, onOpenChange, spaceId }: JoinSpaceDialog
                 </div>
 
                 <p className="text-xs text-center text-muted-foreground">
-                  Note: This is a demo interface. Full audio functionality requires WebRTC integration.
+                  💡 Tip: Recordings are saved automatically and can be played back anytime
                 </p>
               </div>
             )}
