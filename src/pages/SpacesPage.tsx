@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { TopBar } from '@/components/layout/TopBar';
 import { supabase } from '@/lib/supabase';
 import { Space } from '@/types';
-import { Radio, Users, Mic, MicOff, Loader2, Headphones } from 'lucide-react';
+import { Radio, Users, Mic, Loader2, Headphones } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -10,8 +10,6 @@ import { formatDistanceToNow } from 'date-fns';
 import { formatNumber } from '@/lib/utils';
 import { StartSpaceDialog } from '@/components/features/StartSpaceDialog';
 import { JoinSpaceDialog } from '@/components/features/JoinSpaceDialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { SpaceRecordingsPlaylist } from '@/components/features/SpaceRecordingsPlaylist';
 
 export default function SpacesPage() {
   const { user } = useAuth();
@@ -102,20 +100,35 @@ export default function SpacesPage() {
           )}
         </div>
 
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'live' | 'recordings')} className="mb-6">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="live">
-              <Radio className="w-4 h-4 mr-2" />
+        <div className="sticky top-14 z-30 bg-background border-b border-border mb-6">
+          <div className="flex">
+            <button
+              onClick={() => setActiveTab('live')}
+              className={`flex-1 py-4 font-semibold transition-colors border-b-2 ${
+                activeTab === 'live'
+                  ? 'border-primary text-foreground'
+                  : 'border-transparent text-muted-foreground hover:bg-muted/5'
+              }`}
+            >
+              <Radio className="w-4 h-4 mr-2 inline" />
               Live Now
-            </TabsTrigger>
-            <TabsTrigger value="recordings">
-              <Headphones className="w-4 h-4 mr-2" />
+            </button>
+            <button
+              onClick={() => setActiveTab('recordings')}
+              className={`flex-1 py-4 font-semibold transition-colors border-b-2 ${
+                activeTab === 'recordings'
+                  ? 'border-primary text-foreground'
+                  : 'border-transparent text-muted-foreground hover:bg-muted/5'
+              }`}
+            >
+              <Headphones className="w-4 h-4 mr-2 inline" />
               Recordings
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
+            </button>
+          </div>
+        </div>
 
-        <TabsContent value="live" className="mt-0">
+        {activeTab === 'live' && (
+          <div>
         {spaces.length === 0 ? (
           <div className="text-center py-12">
             <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
@@ -196,9 +209,11 @@ export default function SpacesPage() {
             ))}
           </div>
         )}
-        </TabsContent>
+          </div>
+        )}
 
-        <TabsContent value="recordings" className="mt-0">
+        {activeTab === 'recordings' && (
+          <div>
           {allRecordings.length === 0 ? (
             <div className="text-center py-12">
               <div className="w-20 h-20 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
@@ -247,7 +262,8 @@ export default function SpacesPage() {
               ))}
             </div>
           )}
-        </TabsContent>
+          </div>
+        )}
       </div>
 
       <div className="border-t border-border p-6 mt-8 bg-muted/20">

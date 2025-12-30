@@ -3,7 +3,6 @@ import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import { Play, Pause, Volume2, VolumeX, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Slider } from '@/components/ui/slider';
 
 interface LiveAudioPlayerProps {
   spaceId: string;
@@ -163,12 +162,14 @@ export function LiveAudioPlayer({ spaceId, isLive = false }: LiveAudioPlayerProp
               <Volume2 className="w-4 h-4" />
             )}
           </Button>
-          <Slider
-            value={[volume]}
-            onValueChange={(value) => setVolume(value[0])}
-            max={100}
-            step={1}
-            className="w-20"
+          <input
+            type="range"
+            value={volume}
+            onChange={(e) => setVolume(parseInt(e.target.value))}
+            min="0"
+            max="100"
+            step="1"
+            className="w-20 h-1 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
           />
         </div>
       </div>
