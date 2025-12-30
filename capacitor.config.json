@@ -1,0 +1,6 @@
+{
+  "appId": "com.xclone.app",
+  "appName": "XClone",
+  "webDir": "dist",
+  "bundledWebRuntime": false
+}
