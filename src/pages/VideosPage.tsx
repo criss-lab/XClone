@@ -75,7 +75,7 @@ export default function VideosPage() {
   return (
     <div
       ref={containerRef}
-      className="h-screen overflow-y-scroll snap-y snap-mandatory"
+      className="h-screen w-full max-w-full overflow-x-hidden overflow-y-scroll snap-y snap-mandatory"
       style={{ scrollBehavior: 'smooth' }}
     >
       {videos.map((video, index) => (

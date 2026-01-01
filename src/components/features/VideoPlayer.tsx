@@ -146,19 +146,20 @@ export function VideoPlayer({ post, isActive, onUpdate }: VideoPlayerProps) {
   };
 
   return (
-    <div className="relative h-screen w-full bg-black snap-start snap-always">
+    <div className="relative h-screen w-full max-w-full bg-black snap-start snap-always overflow-hidden">
       <video
         ref={videoRef}
         src={post.video_url || ''}
         loop
         playsInline
         muted={isMuted}
-        className="h-full w-full object-contain"
+        className="h-full w-full object-cover"
         onClick={togglePlay}
+        style={{ maxWidth: '100vw' }}
       />
 
       {/* Overlay Controls */}
-      <div className="absolute inset-0 flex flex-col justify-between p-4 pointer-events-none">
+      <div className="absolute inset-0 flex flex-col justify-between p-4 pointer-events-none" style={{ maxWidth: '100vw' }}>
         {/* Top Info */}
         <div className="flex items-center justify-between text-white pointer-events-auto">
           <div className="flex items-center space-x-2">

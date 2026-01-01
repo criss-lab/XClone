@@ -33,9 +33,9 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <div className="flex min-h-screen bg-background">
+        <div className="flex min-h-screen bg-background overflow-x-hidden">
           <Sidebar />
-          <main className="flex-1 max-w-2xl w-full border-x border-border">
+          <main className="flex-1 max-w-2xl w-full border-x border-border overflow-x-hidden">  
             <Routes>
               <Route path="/" element={<HomePage />} />
               <Route path="/explore" element={<ExplorePage />} />

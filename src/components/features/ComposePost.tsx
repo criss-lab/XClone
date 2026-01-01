@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Image, Video, Loader2, X, BarChart3, Smile, Calendar, ShoppingBag, DollarSign } from 'lucide-react';
+import { Image, Video, Loader2, X, BarChart3, Smile, Calendar, ShoppingBag } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { CreatePollDialog } from './CreatePollDialog';
 import { SchedulePostDialog } from './SchedulePostDialog';
@@ -31,8 +31,6 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
   const [scheduledDate, setScheduledDate] = useState<Date | null>(null);
   const [showProductDialog, setShowProductDialog] = useState(false);
   const [taggedProducts, setTaggedProducts] = useState<any[]>([]);
-  const [isMonetized, setIsMonetized] = useState(false);
-  const [contentPrice, setContentPrice] = useState<string>('');
   const { toast } = useToast();
 
   if (!user) {
@@ -59,6 +57,7 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
       }
       setImage(file);
       setVideo(null);
+      setGifUrl(null);
     }
   };
 
@@ -75,6 +74,7 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
       }
       setVideo(file);
       setImage(null);
+      setGifUrl(null);
     }
   };
 
@@ -178,9 +178,7 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
         image_url: imageUrl || gifUrl,
         video_url: videoUrl,
         is_video: isVideo,
-        community_id: communityId || null,
-        is_monetized: isMonetized,
-        price: isMonetized && contentPrice ? parseFloat(contentPrice) : 0
+        community_id: communityId || null
       }).select().single();
 
       if (error) throw error;
@@ -235,8 +233,6 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
       setGifUrl(null);
       setScheduledDate(null);
       setTaggedProducts([]);
-      setIsMonetized(false);
-      setContentPrice('');
       toast({ title: 'Success', description: 'Post created successfully' });
       onSuccess?.();
     } catch (error: any) {
@@ -266,16 +262,16 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
             </div>
           )}
         </div>
-        <div className="flex-1">
+        <div className="flex-1 overflow-hidden">
           <Textarea
             placeholder="What's happening?"
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            className="min-h-[80px] border-0 resize-none focus-visible:ring-0 p-0 text-lg bg-transparent"
+            className="min-h-[80px] border-0 resize-none focus-visible:ring-0 p-0 text-lg bg-transparent w-full"
             maxLength={700}
           />
           {image && (
-            <div className="mt-2 relative rounded-2xl overflow-hidden">
+            <div className="mt-2 relative rounded-2xl overflow-hidden max-w-full">
               <img
                 src={URL.createObjectURL(image)}
                 alt="Upload preview"
@@ -290,7 +286,7 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
             </div>
           )}
           {video && (
-            <div className="mt-2 relative rounded-2xl overflow-hidden">
+            <div className="mt-2 relative rounded-2xl overflow-hidden max-w-full">
               <video
                 src={URL.createObjectURL(video)}
                 controls
@@ -318,7 +314,7 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
                   Remove
                 </button>
               </div>
-              <p className="text-sm text-muted-foreground">{pollData.question}</p>
+              <p className="text-sm text-muted-foreground break-words">{pollData.question}</p>
             </div>
           )}
           {scheduledDate && (
@@ -356,43 +352,15 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
               </div>
               <div className="flex flex-wrap gap-2">
                 {taggedProducts.map(product => (
-                  <div key={product.id} className="px-2 py-1 bg-muted rounded text-xs">
+                  <div key={product.id} className="px-2 py-1 bg-muted rounded text-xs truncate">
                     {product.name} - ${product.price}
                   </div>
                 ))}
               </div>
             </div>
           )}
-          {isMonetized && (
-            <div className="mt-2 p-3 border border-border rounded-lg bg-green-500/5">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2 text-sm font-medium text-green-600">
-                  <DollarSign className="w-4 h-4" />
-                  Monetized Content
-                </div>
-                <button
-                  onClick={() => {
-                    setIsMonetized(false);
-                    setContentPrice('');
-                  }}
-                  className="text-sm text-muted-foreground hover:text-foreground"
-                >
-                  Remove
-                </button>
-              </div>
-              <input
-                type="number"
-                value={contentPrice}
-                onChange={(e) => setContentPrice(e.target.value)}
-                placeholder="Price ($)"
-                step="0.01"
-                min="0"
-                className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-background text-sm"
-              />
-            </div>
-          )}
           {gifUrl && (
-            <div className="mt-2 relative rounded-2xl overflow-hidden">
+            <div className="mt-2 relative rounded-2xl overflow-hidden max-w-full">
               <img src={gifUrl} alt="GIF" className="max-h-96 w-full object-cover" />
               <button
                 onClick={() => setGifUrl(null)}
@@ -402,9 +370,9 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
               </button>
             </div>
           )}
-          <div className="flex items-center justify-between mt-3 pt-3 border-t border-border">
+          <div className="flex items-center justify-between mt-3 pt-3 border-t border-border overflow-x-auto">
             <div className="flex space-x-2">
-              <label className="cursor-pointer p-2 hover:bg-primary/10 rounded-full text-primary transition-colors">
+              <label className="cursor-pointer p-2 hover:bg-primary/10 rounded-full text-primary transition-colors flex-shrink-0">
                 <Image className="w-5 h-5" />
                 <input
                   type="file"
@@ -414,7 +382,7 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
                   disabled={loading || !!video || !!gifUrl}
                 />
               </label>
-              <label className="cursor-pointer p-2 hover:bg-primary/10 rounded-full text-primary transition-colors">
+              <label className="cursor-pointer p-2 hover:bg-primary/10 rounded-full text-primary transition-colors flex-shrink-0">
                 <Video className="w-5 h-5" />
                 <input
                   type="file"
@@ -427,14 +395,14 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
               <button
                 onClick={() => setShowGifPicker(!showGifPicker)}
                 disabled={loading || !!image || !!video}
-                className="cursor-pointer p-2 hover:bg-primary/10 rounded-full text-primary transition-colors disabled:opacity-50"
+                className="cursor-pointer p-2 hover:bg-primary/10 rounded-full text-primary transition-colors disabled:opacity-50 flex-shrink-0"
               >
                 <Smile className="w-5 h-5" />
               </button>
               <button
                 onClick={() => setShowPollDialog(true)}
                 disabled={loading || !!pollData}
-                className="cursor-pointer p-2 hover:bg-primary/10 rounded-full text-primary transition-colors disabled:opacity-50"
+                className="cursor-pointer p-2 hover:bg-primary/10 rounded-full text-primary transition-colors disabled:opacity-50 flex-shrink-0"
                 title="Add poll"
               >
                 <BarChart3 className="w-5 h-5" />
@@ -442,7 +410,7 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
               <button
                 onClick={() => setShowScheduleDialog(true)}
                 disabled={loading || !!scheduledDate}
-                className="cursor-pointer p-2 hover:bg-primary/10 rounded-full text-primary transition-colors disabled:opacity-50"
+                className="cursor-pointer p-2 hover:bg-primary/10 rounded-full text-primary transition-colors disabled:opacity-50 flex-shrink-0"
                 title="Schedule post"
               >
                 <Calendar className="w-5 h-5" />
@@ -450,23 +418,13 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
               <button
                 onClick={() => setShowProductDialog(true)}
                 disabled={loading}
-                className="cursor-pointer p-2 hover:bg-primary/10 rounded-full text-primary transition-colors disabled:opacity-50"
+                className="cursor-pointer p-2 hover:bg-primary/10 rounded-full text-primary transition-colors disabled:opacity-50 flex-shrink-0"
                 title="Tag products"
               >
                 <ShoppingBag className="w-5 h-5" />
               </button>
-              <button
-                onClick={() => setIsMonetized(!isMonetized)}
-                disabled={loading}
-                className={`cursor-pointer p-2 hover:bg-primary/10 rounded-full transition-colors disabled:opacity-50 ${
-                  isMonetized ? 'text-green-600' : 'text-primary'
-                }`}
-                title="Monetize content"
-              >
-                <DollarSign className="w-5 h-5" />
-              </button>
             </div>
-            <div className="flex items-center space-x-3">
+            <div className="flex items-center space-x-3 flex-shrink-0">
               {content.length > 0 && (
                 <span className={`text-sm ${content.length > 680 ? 'text-destructive' : 'text-muted-foreground'}`}>
                   {content.length}/700

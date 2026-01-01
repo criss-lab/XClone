@@ -361,9 +361,10 @@ export default function AdminPanel() {
 
         {/* Monetization Tabs */}
         <Tabs defaultValue="sponsored" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="sponsored">Sponsored Content</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="sponsored">Sponsored</TabsTrigger>
             <TabsTrigger value="ads">Ad Networks</TabsTrigger>
+            <TabsTrigger value="monetize">Monetize Posts</TabsTrigger>
           </TabsList>
 
           <TabsContent value="sponsored" className="space-y-4">
@@ -576,8 +577,164 @@ export default function AdminPanel() {
               )}
             </div>
           </TabsContent>
+
+          <TabsContent value="monetize" className="space-y-4">
+            <MonetizePostsTab />
+          </TabsContent>
         </Tabs>
       </div>
+    </div>
+  );
+}
+
+function MonetizePostsTab() {
+  const [posts, setPosts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    fetchPosts();
+  }, []);
+
+  const fetchPosts = async () => {
+    try {
+      const { data } = await supabase
+        .from('posts')
+        .select(`
+          *,
+          user:user_profiles(*)
+        `)
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      setPosts(data || []);
+    } catch (error) {
+      console.error('Error fetching posts:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleMonetization = async (postId: string, currentStatus: boolean, price: number) => {
+    try {
+      const { error } = await supabase
+        .from('posts')
+        .update({ 
+          is_monetized: !currentStatus,
+          price: !currentStatus ? price : 0
+        })
+        .eq('id', postId);
+
+      if (error) throw error;
+
+      toast({ 
+        title: !currentStatus ? 'Post monetized' : 'Monetization removed',
+        description: !currentStatus ? `Set at $${price}` : 'Post is now free'
+      });
+      fetchPosts();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
+  };
+
+  if (loading) {
+    return <div className="text-center py-8"><Loader2 className="w-6 h-6 animate-spin mx-auto" /></div>;
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+        <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-1">Content Monetization</h4>
+        <p className="text-sm text-blue-700 dark:text-blue-300">
+          Enable monetization for user posts. Users must pay to access monetized content.
+        </p>
+      </div>
+
+      {posts.map((post) => (
+        <div key={post.id} className="bg-muted/30 p-4 rounded-xl">
+          <div className="flex justify-between items-start mb-2">
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="font-semibold">@{post.user?.username}</span>
+                {post.is_monetized && (
+                  <span className="px-2 py-0.5 bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400 rounded text-xs font-medium">
+                    ${post.price}
+                  </span>
+                )}
+              </div>
+              <p className="text-sm line-clamp-2">{post.content}</p>
+              {post.video_url && (
+                <p className="text-xs text-muted-foreground mt-1">📹 Video content</p>
+              )}
+            </div>
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button size="sm" variant="outline">
+                  {post.is_monetized ? 'Update' : 'Monetize'}
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Monetize Post</DialogTitle>
+                </DialogHeader>
+                <MonetizeForm
+                  post={post}
+                  onSubmit={(price) => {
+                    toggleMonetization(post.id, post.is_monetized, price);
+                  }}
+                />
+              </DialogContent>
+            </Dialog>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function MonetizeForm({ post, onSubmit }: { post: any; onSubmit: (price: number) => void }) {
+  const [price, setPrice] = useState(post.price?.toString() || '');
+
+  return (
+    <div className="space-y-4 pt-4">
+      <div>
+        <label className="block text-sm font-medium mb-2">Price ($)</label>
+        <Input
+          type="number"
+          step="0.01"
+          min="0"
+          placeholder="9.99"
+          value={price}
+          onChange={(e) => setPrice(e.target.value)}
+        />
+        <p className="text-xs text-muted-foreground mt-1">
+          Users will pay this amount to access the content
+        </p>
+      </div>
+      <div className="bg-muted/50 rounded-lg p-3 text-sm">
+        <p className="font-medium mb-1">Post Preview:</p>
+        <p className="text-muted-foreground line-clamp-3">{post.content}</p>
+      </div>
+      <Button
+        onClick={() => onSubmit(parseFloat(price) || 0)}
+        className="w-full"
+        disabled={!price || parseFloat(price) <= 0}
+      >
+        {post.is_monetized ? 'Update Price' : 'Enable Monetization'}
+      </Button>
+      {post.is_monetized && (
+        <Button
+          onClick={() => onSubmit(0)}
+          variant="outline"
+          className="w-full"
+        >
+          Remove Monetization
+        </Button>
+      )}
     </div>
   );
 }
