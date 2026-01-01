@@ -46,3 +46,17 @@ export function extractMentions(content: string): string[] {
   const matches = content.match(/@(\w+)/g);
   return matches ? matches.map(mention => mention.substring(1).toLowerCase()) : [];
 }
+
+export function generateShareablePostUrl(postId: string): string {
+  const baseUrl = window.location.origin;
+  return `${baseUrl}/post/${postId}`;
+}
+
+export function formatDuration(minutes: number): string {
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  if (hours < 24) return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+  const days = Math.floor(hours / 24);
+  return `${days}d`;
+}

@@ -4,9 +4,11 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Image, Video, Loader2, X, BarChart3, Smile } from 'lucide-react';
+import { Image, Video, Loader2, X, BarChart3, Smile, Calendar, ShoppingBag, DollarSign } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { CreatePollDialog } from './CreatePollDialog';
+import { SchedulePostDialog } from './SchedulePostDialog';
+import { ProductTagDialog } from './ProductTagDialog';
 import { toast as sonnerToast } from 'sonner';
 
 interface ComposePostProps {
@@ -25,6 +27,12 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
   const [pollData, setPollData] = useState<any>(null);
   const [gifUrl, setGifUrl] = useState<string | null>(null);
   const [showGifPicker, setShowGifPicker] = useState(false);
+  const [showScheduleDialog, setShowScheduleDialog] = useState(false);
+  const [scheduledDate, setScheduledDate] = useState<Date | null>(null);
+  const [showProductDialog, setShowProductDialog] = useState(false);
+  const [taggedProducts, setTaggedProducts] = useState<any[]>([]);
+  const [isMonetized, setIsMonetized] = useState(false);
+  const [contentPrice, setContentPrice] = useState<string>('');
   const { toast } = useToast();
 
   if (!user) {
@@ -74,6 +82,17 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
     setPollData(data);
     setShowPollDialog(false);
     sonnerToast.success('Poll attached');
+  };
+
+  const handleSchedule = (date: Date) => {
+    setScheduledDate(date);
+    setShowScheduleDialog(false);
+    sonnerToast.success('Post scheduled');
+  };
+
+  const handleProductsSelected = (products: any[]) => {
+    setTaggedProducts(products);
+    sonnerToast.success(`${products.length} product(s) tagged`);
   };
 
   const handlePost = async () => {
@@ -127,6 +146,32 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
         isVideo = true;
       }
 
+      // If scheduled, create scheduled_post instead
+      if (scheduledDate) {
+        const { error: scheduleError } = await supabase.from('scheduled_posts').insert({
+          user_id: user.id,
+          content: content.trim(),
+          image_url: imageUrl || gifUrl,
+          video_url: videoUrl,
+          scheduled_for: scheduledDate.toISOString(),
+          status: 'pending'
+        });
+
+        if (scheduleError) throw scheduleError;
+
+        setContent('');
+        setImage(null);
+        setVideo(null);
+        setPollData(null);
+        setGifUrl(null);
+        setScheduledDate(null);
+        setTaggedProducts([]);
+        toast({ title: 'Success', description: 'Post scheduled successfully' });
+        onSuccess?.();
+        setLoading(false);
+        return;
+      }
+
       const { data: postData, error } = await supabase.from('posts').insert({
         user_id: user.id,
         content: content.trim(),
@@ -134,6 +179,8 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
         video_url: videoUrl,
         is_video: isVideo,
         community_id: communityId || null,
+        is_monetized: isMonetized,
+        price: isMonetized && contentPrice ? parseFloat(contentPrice) : 0
       }).select().single();
 
       if (error) throw error;
@@ -167,11 +214,29 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
         if (optionsError) throw optionsError;
       }
 
+      // Tag products
+      if (taggedProducts.length > 0 && postData) {
+        const productTags = taggedProducts.map(product => ({
+          post_id: postData.id,
+          product_id: product.id
+        }));
+
+        const { error: tagError } = await supabase
+          .from('product_tags')
+          .insert(productTags);
+
+        if (tagError) console.error('Error tagging products:', tagError);
+      }
+
       setContent('');
       setImage(null);
       setVideo(null);
       setPollData(null);
       setGifUrl(null);
+      setScheduledDate(null);
+      setTaggedProducts([]);
+      setIsMonetized(false);
+      setContentPrice('');
       toast({ title: 'Success', description: 'Post created successfully' });
       onSuccess?.();
     } catch (error: any) {
@@ -256,6 +321,76 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
               <p className="text-sm text-muted-foreground">{pollData.question}</p>
             </div>
           )}
+          {scheduledDate && (
+            <div className="mt-2 p-3 border border-border rounded-lg bg-primary/5">
+              <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <Calendar className="w-4 h-4" />
+                  Scheduled
+                </div>
+                <button
+                  onClick={() => setScheduledDate(null)}
+                  className="text-sm text-muted-foreground hover:text-foreground"
+                >
+                  Remove
+                </button>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                {scheduledDate.toLocaleString()}
+              </p>
+            </div>
+          )}
+          {taggedProducts.length > 0 && (
+            <div className="mt-2 p-3 border border-border rounded-lg">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <ShoppingBag className="w-4 h-4" />
+                  {taggedProducts.length} product{taggedProducts.length !== 1 ? 's' : ''} tagged
+                </div>
+                <button
+                  onClick={() => setTaggedProducts([])}
+                  className="text-sm text-muted-foreground hover:text-foreground"
+                >
+                  Remove
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {taggedProducts.map(product => (
+                  <div key={product.id} className="px-2 py-1 bg-muted rounded text-xs">
+                    {product.name} - ${product.price}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {isMonetized && (
+            <div className="mt-2 p-3 border border-border rounded-lg bg-green-500/5">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2 text-sm font-medium text-green-600">
+                  <DollarSign className="w-4 h-4" />
+                  Monetized Content
+                </div>
+                <button
+                  onClick={() => {
+                    setIsMonetized(false);
+                    setContentPrice('');
+                  }}
+                  className="text-sm text-muted-foreground hover:text-foreground"
+                >
+                  Remove
+                </button>
+              </div>
+              <input
+                type="number"
+                value={contentPrice}
+                onChange={(e) => setContentPrice(e.target.value)}
+                placeholder="Price ($)"
+                step="0.01"
+                min="0"
+                className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-background text-sm"
+              />
+            </div>
+          )}
           {gifUrl && (
             <div className="mt-2 relative rounded-2xl overflow-hidden">
               <img src={gifUrl} alt="GIF" className="max-h-96 w-full object-cover" />
@@ -300,8 +435,35 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
                 onClick={() => setShowPollDialog(true)}
                 disabled={loading || !!pollData}
                 className="cursor-pointer p-2 hover:bg-primary/10 rounded-full text-primary transition-colors disabled:opacity-50"
+                title="Add poll"
               >
                 <BarChart3 className="w-5 h-5" />
+              </button>
+              <button
+                onClick={() => setShowScheduleDialog(true)}
+                disabled={loading || !!scheduledDate}
+                className="cursor-pointer p-2 hover:bg-primary/10 rounded-full text-primary transition-colors disabled:opacity-50"
+                title="Schedule post"
+              >
+                <Calendar className="w-5 h-5" />
+              </button>
+              <button
+                onClick={() => setShowProductDialog(true)}
+                disabled={loading}
+                className="cursor-pointer p-2 hover:bg-primary/10 rounded-full text-primary transition-colors disabled:opacity-50"
+                title="Tag products"
+              >
+                <ShoppingBag className="w-5 h-5" />
+              </button>
+              <button
+                onClick={() => setIsMonetized(!isMonetized)}
+                disabled={loading}
+                className={`cursor-pointer p-2 hover:bg-primary/10 rounded-full transition-colors disabled:opacity-50 ${
+                  isMonetized ? 'text-green-600' : 'text-primary'
+                }`}
+                title="Monetize content"
+              >
+                <DollarSign className="w-5 h-5" />
               </button>
             </div>
             <div className="flex items-center space-x-3">
@@ -345,6 +507,18 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
         <CreatePollDialog
           onClose={() => setShowPollDialog(false)}
           onPollCreated={handlePollCreated}
+        />
+      )}
+      {showScheduleDialog && (
+        <SchedulePostDialog
+          onClose={() => setShowScheduleDialog(false)}
+          onSchedule={handleSchedule}
+        />
+      )}
+      {showProductDialog && (
+        <ProductTagDialog
+          onClose={() => setShowProductDialog(false)}
+          onProductSelected={handleProductsSelected}
         />
       )}
     </div>

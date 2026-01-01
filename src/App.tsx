@@ -23,9 +23,11 @@ import CommunitiesPage from '@/pages/CommunitiesPage';
 import CommunityPage from '@/pages/CommunityPage';
 import HashtagPage from '@/pages/HashtagPage';
 import AIBotSetup from '@/pages/AIBotSetup';
-import BookmarksPage from '@/pages/BookmarksPage';
-import ListsPage from '@/pages/ListsPage';
+import { BookmarksPage } from '@/pages/BookmarksPage';
+import { ListsPage } from '@/pages/ListsPage';
 import { MonetizationDashboard } from '@/pages/MonetizationDashboard';
+import { ProductsPage } from '@/pages/ProductsPage';
+import { ScheduledPostsPage } from '@/pages/ScheduledPostsPage';
 
 export default function App() {
   return (
@@ -55,6 +57,8 @@ export default function App() {
               <Route path="/bookmarks" element={<BookmarksPage />} />
               <Route path="/lists" element={<ListsPage />} />
               <Route path="/monetization" element={<MonetizationDashboard />} />
+              <Route path="/products" element={<ProductsPage />} />
+              <Route path="/scheduled" element={<ScheduledPostsPage />} />
             </Routes>
           </main>
           <RightSidebar />
