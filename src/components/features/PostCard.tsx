@@ -8,6 +8,8 @@ import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import { cn, parseContent, formatNumber } from '@/lib/utils';
 import { SharePostDialog } from './SharePostDialog';
+import { BookmarkButton } from './BookmarkButton';
+import { PollCard } from './PollCard';
 
 interface PostCardProps {
   post: Post;
@@ -23,6 +25,25 @@ export function PostCard({ post, onUpdate }: PostCardProps) {
   const [likesCount, setLikesCount] = useState(post.likes_count);
   const [repostsCount, setRepostsCount] = useState(post.reposts_count);
   const [showShareDialog, setShowShareDialog] = useState(false);
+  const [poll, setPoll] = useState<any>(null);
+
+  // Fetch poll if it exists
+  useEffect(() => {
+    const fetchPoll = async () => {
+      const { data } = await supabase
+        .from('polls')
+        .select(`
+          *,
+          options:poll_options(*)
+        `)
+        .eq('post_id', post.id)
+        .single();
+
+      if (data) setPoll(data);
+    };
+
+    fetchPoll();
+  }, [post.id]);
 
   // Check if user has already liked/reposted this post
   useEffect(() => {
@@ -269,6 +290,8 @@ export function PostCard({ post, onUpdate }: PostCardProps) {
             </div>
           )}
 
+          {poll && <PollCard poll={poll} postId={post.id} />}
+
           <div className="flex justify-between mt-3 max-w-md">
             <button 
               className="flex items-center space-x-2 text-muted-foreground hover:text-primary transition-colors group"
@@ -320,6 +343,10 @@ export function PostCard({ post, onUpdate }: PostCardProps) {
                 <Share className="w-5 h-5" />
               </div>
             </button>
+
+            <div onClick={(e) => e.stopPropagation()}>
+              <BookmarkButton postId={post.id} />
+            </div>
           </div>
         </div>
       </div>

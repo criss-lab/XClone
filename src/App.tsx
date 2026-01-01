@@ -5,6 +5,7 @@ import { RightSidebar } from '@/components/layout/RightSidebar';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { FloatingActionButton } from '@/components/layout/FloatingActionButton';
 import { Toaster } from '@/components/ui/toaster';
+import { Toaster as Sonner } from 'sonner';
 import HomePage from '@/pages/HomePage';
 import ExplorePage from '@/pages/ExplorePage';
 import NotificationsPage from '@/pages/NotificationsPage';
@@ -22,6 +23,9 @@ import CommunitiesPage from '@/pages/CommunitiesPage';
 import CommunityPage from '@/pages/CommunityPage';
 import HashtagPage from '@/pages/HashtagPage';
 import AIBotSetup from '@/pages/AIBotSetup';
+import BookmarksPage from '@/pages/BookmarksPage';
+import ListsPage from '@/pages/ListsPage';
+import { MonetizationDashboard } from '@/pages/MonetizationDashboard';
 
 export default function App() {
   return (
@@ -48,6 +52,9 @@ export default function App() {
               <Route path="/c/:name" element={<CommunityPage />} />
               <Route path="/hashtag/:tag" element={<HashtagPage />} />
               <Route path="/ai-bot-setup" element={<AIBotSetup />} />
+              <Route path="/bookmarks" element={<BookmarksPage />} />
+              <Route path="/lists" element={<ListsPage />} />
+              <Route path="/monetization" element={<MonetizationDashboard />} />
             </Routes>
           </main>
           <RightSidebar />
@@ -55,6 +62,7 @@ export default function App() {
           <FloatingActionButton />
         </div>
         <Toaster />
+        <Sonner position="top-center" richColors />
       </AuthProvider>
     </BrowserRouter>
   );
