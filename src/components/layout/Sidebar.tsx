@@ -1,7 +1,7 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
-import { Home, Search, Bell, Mail, User, Hash, Radio, LogOut, Plus, Users, TrendingUp, Sparkles, Bookmark, List, DollarSign, BarChart3, ShoppingBag, Calendar } from 'lucide-react';
+import { Home, Search, Bell, Mail, User, Hash, Radio, LogOut, Plus, Users, TrendingUp, Sparkles, Bookmark, List, DollarSign, BarChart3, ShoppingBag, Calendar, Crown, Briefcase } from 'lucide-react';
 import { authService } from '@/lib/auth';
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
@@ -70,6 +70,8 @@ export function Sidebar() {
     { icon: DollarSign, label: 'Monetize', path: '/monetization', requireAuth: true },
     { icon: ShoppingBag, label: 'Products', path: '/products', requireAuth: true },
     { icon: Calendar, label: 'Scheduled', path: '/scheduled', requireAuth: true },
+    { icon: Briefcase, label: 'Creator Studio', path: '/creator-studio', requireAuth: true },
+    { icon: Crown, label: 'Premium', path: '/premium', requireAuth: false },
     { icon: User, label: 'Profile', path: user ? `/profile/${user.username}` : '/auth', requireAuth: true },
   ];
 

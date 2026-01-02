@@ -28,6 +28,8 @@ import { ListsPage } from '@/pages/ListsPage';
 import { MonetizationDashboard } from '@/pages/MonetizationDashboard';
 import { ProductsPage } from '@/pages/ProductsPage';
 import { ScheduledPostsPage } from '@/pages/ScheduledPostsPage';
+import CreatorStudio from '@/pages/CreatorStudio';
+import PremiumPage from '@/pages/PremiumPage';
 
 export default function App() {
   return (
@@ -59,6 +61,8 @@ export default function App() {
               <Route path="/monetization" element={<MonetizationDashboard />} />
               <Route path="/products" element={<ProductsPage />} />
               <Route path="/scheduled" element={<ScheduledPostsPage />} />
+              <Route path="/creator-studio" element={<CreatorStudio />} />
+              <Route path="/premium" element={<PremiumPage />} />
             </Routes>
           </main>
           <RightSidebar />
