@@ -10,6 +10,7 @@ import { cn, parseContent, formatNumber } from '@/lib/utils';
 import { SharePostDialog } from './SharePostDialog';
 import { BookmarkButton } from './BookmarkButton';
 import { PollCard } from './PollCard';
+import { EditPostDialog } from './EditPostDialog';
 
 interface PostCardProps {
   post: Post;
@@ -25,6 +26,7 @@ export function PostCard({ post, onUpdate }: PostCardProps) {
   const [likesCount, setLikesCount] = useState(post.likes_count);
   const [repostsCount, setRepostsCount] = useState(post.reposts_count);
   const [showShareDialog, setShowShareDialog] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
   const [poll, setPoll] = useState<any>(null);
 
   // Fetch poll if it exists
@@ -265,12 +267,18 @@ export function PostCard({ post, onUpdate }: PostCardProps) {
                 {formatDistanceToNow(new Date(post.created_at), { addSuffix: true })}
               </span>
             </div>
-            <button 
-              className="text-muted-foreground hover:text-primary p-2 -mr-2"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <MoreHorizontal className="w-5 h-5" />
-            </button>
+            {user?.id === post.user_id && (
+              <button 
+                className="text-muted-foreground hover:text-primary p-2 -mr-2"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowEditDialog(true);
+                }}
+                title="Edit post"
+              >
+                <MoreHorizontal className="w-5 h-5" />
+              </button>
+            )}
           </div>
 
           <div 
@@ -356,6 +364,18 @@ export function PostCard({ post, onUpdate }: PostCardProps) {
         onOpenChange={setShowShareDialog}
         post={post}
       />
+
+      {user?.id === post.user_id && (
+        <EditPostDialog
+          open={showEditDialog}
+          onOpenChange={setShowEditDialog}
+          post={post}
+          onSuccess={() => {
+            onUpdate?.();
+            toast({ title: 'Post updated' });
+          }}
+        />
+      )}
     </div>
   );
 }
