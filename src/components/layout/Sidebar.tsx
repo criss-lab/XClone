@@ -1,10 +1,11 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
-import { Home, Search, Bell, Mail, User, Hash, Radio, LogOut, Plus, Users, TrendingUp, Sparkles, Bookmark, List, DollarSign, BarChart3, ShoppingBag, Calendar, Crown, Briefcase } from 'lucide-react';
+import { Home, Search, Bell, Mail, User, Hash, Radio, LogOut, Plus, Users, TrendingUp, Sparkles, Bookmark, List, DollarSign, BarChart3, ShoppingBag, Calendar, Crown, Briefcase, Settings, HelpCircle, History, ChevronDown, ChevronUp } from 'lucide-react';
 import { authService } from '@/lib/auth';
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import { formatNumber } from '@/lib/utils';
 
 interface Community {
   id: string;
@@ -20,6 +21,9 @@ export function Sidebar() {
   const { user, logout } = useAuth();
   const [communities, setCommunities] = useState<Community[]>([]);
   const [trendingCommunities, setTrendingCommunities] = useState<Community[]>([]);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showCommunities, setShowCommunities] = useState(true);
+  const [showTrending, setShowTrending] = useState(true);
 
   useEffect(() => {
     if (user) {
@@ -63,16 +67,20 @@ export function Sidebar() {
     { icon: Mail, label: 'Messages', path: '/messages', requireAuth: true },
     { icon: Radio, label: 'Spaces', path: '/spaces', requireAuth: false },
     { icon: Sparkles, label: 'AI', path: '/ai', requireAuth: false },
-    { icon: Users, label: 'Communities', path: '/communities', requireAuth: false },
-    { icon: Bookmark, label: 'Bookmarks', path: '/bookmarks', requireAuth: true },
-    { icon: List, label: 'Lists', path: '/lists', requireAuth: true },
+  ];
+
+  const creatorTools = [
+    { icon: Briefcase, label: 'Creator Studio', path: '/creator-studio', requireAuth: true },
     { icon: BarChart3, label: 'Analytics', path: '/analytics', requireAuth: true },
-    { icon: DollarSign, label: 'Monetize', path: '/monetization', requireAuth: true },
+    { icon: DollarSign, label: 'Monetization', path: '/monetization', requireAuth: true },
     { icon: ShoppingBag, label: 'Products', path: '/products', requireAuth: true },
     { icon: Calendar, label: 'Scheduled', path: '/scheduled', requireAuth: true },
-    { icon: Briefcase, label: 'Creator Studio', path: '/creator-studio', requireAuth: true },
-    { icon: Crown, label: 'Premium', path: '/premium', requireAuth: false },
-    { icon: User, label: 'Profile', path: user ? `/profile/${user.username}` : '/auth', requireAuth: true },
+  ];
+
+  const userTools = [
+    { icon: Bookmark, label: 'Bookmarks', path: '/bookmarks', requireAuth: true },
+    { icon: List, label: 'Lists', path: '/lists', requireAuth: true },
+    { icon: History, label: 'History', path: '/history', requireAuth: true },
   ];
 
   const handleNavClick = (path: string, requireAuth?: boolean) => {
@@ -90,104 +98,217 @@ export function Sidebar() {
   };
 
   return (
-    <aside className="hidden lg:flex lg:flex-col w-72 h-screen sticky top-0 border-r border-border p-4 overflow-y-auto">
-      <div className="flex items-center space-x-2 mb-8 px-3">
+    <aside className="hidden lg:flex lg:flex-col w-72 h-screen sticky top-0 border-r border-border overflow-y-auto">
+      {/* Logo */}
+      <div className="flex items-center space-x-2 p-4 border-b border-border">
         <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center">
           <span className="text-2xl font-bold text-primary-foreground">T</span>
         </div>
-        <span className="text-2xl font-bold">T</span>
+        <span className="text-2xl font-bold">T Social</span>
       </div>
 
-      <nav className="flex-1 space-y-2">
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          const isActive = location.pathname === item.path;
+      {/* Main Navigation */}
+      <nav className="flex-1 p-2">
+        <div className="space-y-1">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = location.pathname === item.path;
 
-          return (
-            <button
-              key={item.path}
-              onClick={() => handleNavClick(item.path, item.requireAuth)}
-              className={`flex items-center space-x-4 px-4 py-3 rounded-full transition-colors w-full text-left ${
-                isActive
-                  ? 'bg-primary/10 text-primary font-semibold'
-                  : 'hover:bg-muted text-foreground'
-              }`}
-            >
-              <Icon className="w-6 h-6" fill={isActive ? 'currentColor' : 'none'} />
-              <span className="text-xl">{item.label}</span>
-            </button>
-          );
-        })}
-
-        {/* Your Communities */}
-        {user && communities.length > 0 && (
-          <div className="pt-4 border-t border-border mt-4">
-            <h3 className="px-4 text-sm font-semibold text-muted-foreground mb-2">Your Communities</h3>
-            {communities.map((community) => (
+            return (
               <button
-                key={community.id}
-                onClick={() => navigate(`/c/${community.name}`)}
-                className="flex items-center space-x-3 px-4 py-2 rounded-lg hover:bg-muted w-full text-left"
+                key={item.path}
+                onClick={() => handleNavClick(item.path, item.requireAuth)}
+                className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors w-full text-left ${
+                  isActive
+                    ? 'bg-primary text-primary-foreground font-semibold'
+                    : 'hover:bg-muted text-foreground'
+                }`}
               >
-                <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0 overflow-hidden">
-                  {community.icon_url ? (
-                    <img src={community.icon_url} alt={community.display_name} className="w-full h-full object-cover" />
-                  ) : (
-                    <span className="text-sm font-bold">{community.display_name[0]}</span>
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{community.display_name}</p>
-                  <p className="text-xs text-muted-foreground">{community.member_count} members</p>
-                </div>
+                <Icon className="w-5 h-5" />
+                <span>{item.label}</span>
               </button>
-            ))}
+            );
+          })}
+        </div>
+
+        {/* User Tools */}
+        {user && (
+          <>
+            <div className="mt-6 mb-2">
+              <h3 className="px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                Library
+              </h3>
+            </div>
+            <div className="space-y-1">
+              {userTools.map((item) => {
+                const Icon = item.icon;
+                const isActive = location.pathname === item.path;
+
+                return (
+                  <button
+                    key={item.path}
+                    onClick={() => handleNavClick(item.path, item.requireAuth)}
+                    className={`flex items-center space-x-3 px-4 py-2 rounded-lg transition-colors w-full text-left text-sm ${
+                      isActive
+                        ? 'bg-primary/10 text-primary font-medium'
+                        : 'hover:bg-muted text-foreground'
+                    }`}
+                  >
+                    <Icon className="w-4 h-4" />
+                    <span>{item.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Creator Tools */}
+            <div className="mt-6 mb-2">
+              <h3 className="px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                Creator Tools
+              </h3>
+            </div>
+            <div className="space-y-1">
+              {creatorTools.map((item) => {
+                const Icon = item.icon;
+                const isActive = location.pathname === item.path;
+
+                return (
+                  <button
+                    key={item.path}
+                    onClick={() => handleNavClick(item.path, item.requireAuth)}
+                    className={`flex items-center space-x-3 px-4 py-2 rounded-lg transition-colors w-full text-left text-sm ${
+                      isActive
+                        ? 'bg-primary/10 text-primary font-medium'
+                        : 'hover:bg-muted text-foreground'
+                    }`}
+                  >
+                    <Icon className="w-4 h-4" />
+                    <span>{item.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
+
+        {/* Communities */}
+        <div className="mt-6">
+          <button
+            onClick={() => setShowCommunities(!showCommunities)}
+            className="flex items-center justify-between w-full px-4 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide hover:text-foreground"
+          >
+            <span>Communities</span>
+            {showCommunities ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </button>
+          
+          {showCommunities && (
+            <div className="mt-2 space-y-1">
+              <button
+                onClick={() => navigate('/communities')}
+                className="flex items-center space-x-2 px-4 py-2 rounded-lg hover:bg-muted w-full text-left text-sm"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Discover Communities</span>
+              </button>
+              
+              {user && communities.length > 0 && (
+                <>
+                  <div className="px-4 py-1 text-xs text-muted-foreground">Your Communities</div>
+                  {communities.map((community) => (
+                    <button
+                      key={community.id}
+                      onClick={() => navigate(`/c/${community.name}`)}
+                      className="flex items-center space-x-3 px-4 py-2 rounded-lg hover:bg-muted w-full text-left"
+                    >
+                      <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                        {community.icon_url ? (
+                          <img src={community.icon_url} alt={community.display_name} className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="text-xs font-bold">{community.display_name[0]}</span>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{community.display_name}</p>
+                        <p className="text-xs text-muted-foreground">{formatNumber(community.member_count)}</p>
+                      </div>
+                    </button>
+                  ))}
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Trending Communities */}
+        {trendingCommunities.length > 0 && (
+          <div className="mt-4">
+            <button
+              onClick={() => setShowTrending(!showTrending)}
+              className="flex items-center justify-between w-full px-4 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide hover:text-foreground"
+            >
+              <div className="flex items-center gap-2">
+                <TrendingUp className="w-4 h-4" />
+                <span>Trending</span>
+              </div>
+              {showTrending ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </button>
+            
+            {showTrending && (
+              <div className="mt-2 space-y-1">
+                {trendingCommunities.map((community) => (
+                  <button
+                    key={community.id}
+                    onClick={() => navigate(`/c/${community.name}`)}
+                    className="flex items-center space-x-3 px-4 py-2 rounded-lg hover:bg-muted w-full text-left"
+                  >
+                    <div className="w-6 h-6 rounded-full bg-accent/20 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                      {community.icon_url ? (
+                        <img src={community.icon_url} alt={community.display_name} className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-xs font-bold">{community.display_name[0]}</span>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{community.display_name}</p>
+                      <p className="text-xs text-muted-foreground">{formatNumber(community.member_count)}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
-        {/* Trending Communities */}
-        <div className="pt-4 border-t border-border mt-4">
-          <h3 className="px-4 text-sm font-semibold text-muted-foreground mb-2 flex items-center">
-            <TrendingUp className="w-4 h-4 mr-2" />
-            Trending Communities
-          </h3>
-          {trendingCommunities.map((community) => (
-            <button
-              key={community.id}
-              onClick={() => navigate(`/c/${community.name}`)}
-              className="flex items-center space-x-3 px-4 py-2 rounded-lg hover:bg-muted w-full text-left"
+        {/* Premium Banner */}
+        <div className="mt-6 mx-2">
+          <div className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 rounded-xl p-4 border border-purple-500/20">
+            <Crown className="w-8 h-8 text-purple-500 mb-2" />
+            <h3 className="font-bold text-sm mb-1">Upgrade to Premium</h3>
+            <p className="text-xs text-muted-foreground mb-3">
+              Get verified, unlock exclusive features, and monetize your content
+            </p>
+            <Button
+              onClick={() => navigate('/premium')}
+              size="sm"
+              className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
             >
-              <div className="w-8 h-8 rounded-full bg-accent/20 flex items-center justify-center flex-shrink-0 overflow-hidden">
-                {community.icon_url ? (
-                  <img src={community.icon_url} alt={community.display_name} className="w-full h-full object-cover" />
-                ) : (
-                  <span className="text-sm font-bold">{community.display_name[0]}</span>
-                )}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{community.display_name}</p>
-                <p className="text-xs text-muted-foreground">{community.member_count} members</p>
-              </div>
-            </button>
-          ))}
+              <Crown className="w-4 h-4 mr-2" />
+              Get Premium
+            </Button>
+          </div>
         </div>
       </nav>
 
-      {user && (
-        <>
-          <Button
-            onClick={() => navigate('/?compose=true')}
-            size="lg"
-            className="w-full rounded-full mb-4 text-lg font-semibold h-12"
-          >
-            <Plus className="w-5 h-5 mr-2" />
-            Post
-          </Button>
-
-          <div className="border-t border-border pt-4">
-            <div className="flex items-center justify-between p-3 hover:bg-muted rounded-full cursor-pointer">
+      {/* User Profile / Sign In */}
+      <div className="p-2 border-t border-border">
+        {user ? (
+          <div className="relative">
+            <button
+              onClick={() => setShowUserMenu(!showUserMenu)}
+              className="flex items-center justify-between p-3 hover:bg-muted rounded-lg w-full transition-colors"
+            >
               <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 rounded-full bg-muted overflow-hidden">
+                <div className="w-10 h-10 rounded-full bg-muted overflow-hidden flex-shrink-0">
                   {user.avatar ? (
                     <img src={user.avatar} alt={user.username} className="w-full h-full object-cover" />
                   ) : (
@@ -196,31 +317,69 @@ export function Sidebar() {
                     </div>
                   )}
                 </div>
-                <div className="flex-1">
-                  <p className="font-semibold">{user.username}</p>
-                  <p className="text-sm text-muted-foreground">@{user.username}</p>
+                <div className="flex-1 min-w-0 text-left">
+                  <p className="font-semibold truncate">{user.username}</p>
+                  <p className="text-sm text-muted-foreground truncate">@{user.username}</p>
                 </div>
               </div>
-              <button
-                onClick={handleLogout}
-                className="p-2 hover:bg-destructive/10 rounded-full text-muted-foreground hover:text-destructive"
-              >
-                <LogOut className="w-5 h-5" />
-              </button>
-            </div>
-          </div>
-        </>
-      )}
+              <ChevronDown className={`w-5 h-5 transition-transform ${showUserMenu ? 'rotate-180' : ''}`} />
+            </button>
 
-      {!user && (
-        <Button
-          onClick={() => navigate('/auth')}
-          size="lg"
-          className="w-full rounded-full text-lg font-semibold h-12"
-        >
-          Sign in
-        </Button>
-      )}
+            {showUserMenu && (
+              <div className="absolute bottom-full left-0 right-0 mb-2 bg-background border border-border rounded-lg shadow-lg overflow-hidden">
+                <button
+                  onClick={() => {
+                    navigate(`/profile/${user.username}`);
+                    setShowUserMenu(false);
+                  }}
+                  className="flex items-center gap-3 w-full p-3 hover:bg-muted text-left"
+                >
+                  <User className="w-5 h-5" />
+                  <span>Profile</span>
+                </button>
+                <button
+                  onClick={() => {
+                    navigate('/settings');
+                    setShowUserMenu(false);
+                  }}
+                  className="flex items-center gap-3 w-full p-3 hover:bg-muted text-left"
+                >
+                  <Settings className="w-5 h-5" />
+                  <span>Settings</span>
+                </button>
+                <button
+                  onClick={() => {
+                    navigate('/help');
+                    setShowUserMenu(false);
+                  }}
+                  className="flex items-center gap-3 w-full p-3 hover:bg-muted text-left"
+                >
+                  <HelpCircle className="w-5 h-5" />
+                  <span>Help</span>
+                </button>
+                <div className="border-t border-border" />
+                <button
+                  onClick={() => {
+                    handleLogout();
+                    setShowUserMenu(false);
+                  }}
+                  className="flex items-center gap-3 w-full p-3 hover:bg-destructive/10 text-destructive text-left"
+                >
+                  <LogOut className="w-5 h-5" />
+                  <span>Log out</span>
+                </button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <Button
+            onClick={() => navigate('/auth')}
+            className="w-full rounded-lg font-semibold"
+          >
+            Sign in
+          </Button>
+        )}
+      </div>
     </aside>
   );
 }

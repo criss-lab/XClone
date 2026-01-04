@@ -61,20 +61,49 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
     }
   };
 
-  const handleVideoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleVideoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files?.[0]) {
       const file = e.target.files[0];
-      if (file.size > 10 * 1024 * 1024) {
-        toast({
-          title: 'Error',
-          description: 'Video must be less than 10MB',
-          variant: 'destructive',
-        });
+      
+      // Check file type
+      if (!file.type.startsWith('video/')) {
+        sonnerToast.error('Please select a valid video file');
         return;
       }
-      setVideo(file);
-      setImage(null);
-      setGifUrl(null);
+      
+      // Check file size (50MB for premium, 10MB for free)
+      const maxSize = user?.creator_tier !== 'free' ? 50 * 1024 * 1024 : 10 * 1024 * 1024;
+      if (file.size > maxSize) {
+        const sizeMB = (maxSize / (1024 * 1024)).toFixed(0);
+        sonnerToast.error(`Video must be less than ${sizeMB}MB. ${user?.creator_tier === 'free' ? 'Upgrade to Premium for larger uploads!' : ''}`);
+        return;
+      }
+      
+      // Preview video before setting
+      const videoUrl = URL.createObjectURL(file);
+      const videoElement = document.createElement('video');
+      videoElement.src = videoUrl;
+      
+      videoElement.onloadedmetadata = () => {
+        // Check video duration (max 10 minutes for free users)
+        const maxDuration = user?.creator_tier !== 'free' ? 3600 : 600; // 1 hour for premium, 10 min for free
+        if (videoElement.duration > maxDuration) {
+          const maxMin = Math.floor(maxDuration / 60);
+          sonnerToast.error(`Video duration cannot exceed ${maxMin} minutes`);
+          URL.revokeObjectURL(videoUrl);
+          return;
+        }
+        
+        setVideo(file);
+        setImage(null);
+        setGifUrl(null);
+        sonnerToast.success('Video ready to upload!');
+      };
+      
+      videoElement.onerror = () => {
+        sonnerToast.error('Failed to load video. Please try a different file.');
+        URL.revokeObjectURL(videoUrl);
+      };
     }
   };
 
@@ -126,17 +155,24 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
       }
 
       if (video) {
-        const fileExt = video.name.split('.').pop();
-        const fileName = `${user.id}/${Date.now()}.${fileExt}`;
+        sonnerToast.loading('Uploading video...');
         
-        const { error: uploadError } = await supabase.storage
+        const fileExt = video.name.split('.').pop();
+        const fileName = `videos/${user.id}/${Date.now()}.${fileExt}`;
+        
+        // Upload with progress tracking
+        const { data: uploadData, error: uploadError } = await supabase.storage
           .from('posts')
           .upload(fileName, video, {
             cacheControl: '3600',
             upsert: false,
           });
 
-        if (uploadError) throw uploadError;
+        if (uploadError) {
+          console.error('Video upload error:', uploadError);
+          sonnerToast.error(`Upload failed: ${uploadError.message}`);
+          throw uploadError;
+        }
 
         const { data: { publicUrl } } = supabase.storage
           .from('posts')
@@ -144,6 +180,8 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
 
         videoUrl = publicUrl;
         isVideo = true;
+        sonnerToast.dismiss();
+        sonnerToast.success('Video uploaded successfully!');
       }
 
       // If scheduled, create scheduled_post instead
