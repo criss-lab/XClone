@@ -9,10 +9,11 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
-import { Radio, Loader2 } from 'lucide-react';
+import { Radio, Loader2, Video } from 'lucide-react';
 
 interface StartSpaceDialogProps {
   open: boolean;
@@ -28,6 +29,7 @@ export function StartSpaceDialog({ open, onOpenChange, onSuccess }: StartSpaceDi
     title: '',
     description: '',
   });
+  const [hasVideo, setHasVideo] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,6 +43,7 @@ export function StartSpaceDialog({ open, onOpenChange, onSuccess }: StartSpaceDi
         description: formData.description.trim() || null,
         is_live: true,
         listener_count: 0,
+        has_video: hasVideo,
       });
 
       if (error) throw error;
@@ -51,6 +54,7 @@ export function StartSpaceDialog({ open, onOpenChange, onSuccess }: StartSpaceDi
       });
 
       setFormData({ title: '', description: '' });
+      setHasVideo(false);
       onOpenChange(false);
       onSuccess();
     } catch (error: any) {
@@ -77,7 +81,7 @@ export function StartSpaceDialog({ open, onOpenChange, onSuccess }: StartSpaceDi
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="text-sm font-semibold mb-2 block">Title *</label>
+            <Label className="text-sm font-semibold mb-2 block">Title *</Label>
             <Input
               placeholder="What's your Space about?"
               value={formData.title}
@@ -88,7 +92,7 @@ export function StartSpaceDialog({ open, onOpenChange, onSuccess }: StartSpaceDi
           </div>
 
           <div>
-            <label className="text-sm font-semibold mb-2 block">Description</label>
+            <Label className="text-sm font-semibold mb-2 block">Description</Label>
             <Textarea
               placeholder="Add more details about your Space..."
               value={formData.description}
@@ -98,6 +102,20 @@ export function StartSpaceDialog({ open, onOpenChange, onSuccess }: StartSpaceDi
             />
           </div>
 
+          <div className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              id="hasVideo"
+              checked={hasVideo}
+              onChange={(e) => setHasVideo(e.target.checked)}
+              className="rounded border-border"
+            />
+            <Label htmlFor="hasVideo" className="flex items-center gap-2 cursor-pointer">
+              <Video className="w-4 h-4" />
+              Enable video streaming
+            </Label>
+          </div>
+
           <div className="bg-muted/50 p-4 rounded-lg text-sm space-y-2">
             <p className="font-semibold">🎙️ Space Guidelines:</p>
             <ul className="text-muted-foreground space-y-1 text-xs">
@@ -105,6 +123,7 @@ export function StartSpaceDialog({ open, onOpenChange, onSuccess }: StartSpaceDi
               <li>• Keep conversations relevant to the topic</li>
               <li>• You can invite speakers and manage participants</li>
               <li>• Spaces can be ended at any time by the host</li>
+              {hasVideo && <li>• Video requires stable internet connection</li>}
             </ul>
           </div>
 

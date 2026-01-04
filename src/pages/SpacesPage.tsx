@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { TopBar } from '@/components/layout/TopBar';
 import { supabase } from '@/lib/supabase';
 import { Space } from '@/types';
-import { Radio, Users, Mic, Loader2, Headphones } from 'lucide-react';
+import { Radio, Users, Mic, Loader2, Headphones, Video, Settings } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { formatNumber } from '@/lib/utils';
 import { StartSpaceDialog } from '@/components/features/StartSpaceDialog';
 import { JoinSpaceDialog } from '@/components/features/JoinSpaceDialog';
+import { ManageSpaceDialog } from '@/components/features/ManageSpaceDialog';
 
 export default function SpacesPage() {
   const { user } = useAuth();
@@ -21,6 +22,8 @@ export default function SpacesPage() {
   const [selectedSpaceId, setSelectedSpaceId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'live' | 'recordings'>('live');
   const [allRecordings, setAllRecordings] = useState<any[]>([]);
+  const [showManageDialog, setShowManageDialog] = useState(false);
+  const [selectedSpace, setSelectedSpace] = useState<any>(null);
 
   useEffect(() => {
     fetchSpaces();
@@ -165,7 +168,26 @@ export default function SpacesPage() {
                     <span>·</span>
                     <Users className="w-4 h-4" />
                     <span>{formatNumber(space.listener_count)} listening</span>
+                    {space.has_video && (
+                      <>
+                        <span>·</span>
+                        <Video className="w-4 h-4 text-primary" />
+                        <span>Video</span>
+                      </>
+                    )}
                   </div>
+                  {user?.id === space.host_id && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedSpace(space);
+                        setShowManageDialog(true);
+                      }}
+                      className="p-2 hover:bg-muted rounded-lg transition-colors"
+                    >
+                      <Settings className="w-5 h-5 text-muted-foreground" />
+                    </button>
+                  )}
                 </div>
 
                 <h3 className="text-xl font-bold mb-2">{space.title}</h3>
@@ -298,6 +320,18 @@ export default function SpacesPage() {
         onOpenChange={setShowJoinDialog}
         spaceId={selectedSpaceId}
       />
+
+      {selectedSpace && (
+        <ManageSpaceDialog
+          open={showManageDialog}
+          onOpenChange={setShowManageDialog}
+          space={selectedSpace}
+          onSuccess={() => {
+            fetchSpaces();
+            fetchAllRecordings();
+          }}
+        />
+      )}
     </div>
   );
 }

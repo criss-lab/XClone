@@ -1,4 +1,4 @@
-import { Heart, MessageCircle, Repeat2, Share, MoreHorizontal, BadgeCheck } from 'lucide-react';
+import { Heart, MessageCircle, Repeat2, Share, MoreHorizontal, BadgeCheck, Trash2 } from 'lucide-react';
 import { Post } from '@/types';
 import { formatDistanceToNow } from 'date-fns';
 import { useState, useEffect } from 'react';
@@ -27,6 +27,7 @@ export function PostCard({ post, onUpdate }: PostCardProps) {
   const [repostsCount, setRepostsCount] = useState(post.reposts_count);
   const [showShareDialog, setShowShareDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
+  const [showDeleteMenu, setShowDeleteMenu] = useState(false);
   const [poll, setPoll] = useState<any>(null);
 
   // Fetch poll if it exists
@@ -218,6 +219,32 @@ export function PostCard({ post, onUpdate }: PostCardProps) {
     navigate(`/post/${post.id}`);
   };
 
+  const handleDelete = async () => {
+    if (!window.confirm('Are you sure you want to delete this post? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('posts')
+        .delete()
+        .eq('id', post.id)
+        .eq('user_id', user?.id);
+
+      if (error) throw error;
+
+      toast({ title: 'Post deleted successfully' });
+      onUpdate?.();
+    } catch (error: any) {
+      console.error('Error deleting post:', error);
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to delete post',
+        variant: 'destructive',
+      });
+    }
+  };
+
   return (
     <div 
       className="border-b border-border p-4 hover:bg-muted/5 transition-colors cursor-pointer"
@@ -268,16 +295,44 @@ export function PostCard({ post, onUpdate }: PostCardProps) {
               </span>
             </div>
             {user?.id === post.user_id && (
-              <button 
-                className="text-muted-foreground hover:text-primary p-2 -mr-2"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowEditDialog(true);
-                }}
-                title="Edit post"
-              >
-                <MoreHorizontal className="w-5 h-5" />
-              </button>
+              <div className="relative">
+                <button 
+                  className="text-muted-foreground hover:text-primary p-2 -mr-2"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowDeleteMenu(!showDeleteMenu);
+                  }}
+                  title="Options"
+                >
+                  <MoreHorizontal className="w-5 h-5" />
+                </button>
+                {showDeleteMenu && (
+                  <div className="absolute right-0 mt-2 w-48 bg-background border border-border rounded-lg shadow-lg z-50">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowEditDialog(true);
+                        setShowDeleteMenu(false);
+                      }}
+                      className="w-full text-left px-4 py-3 hover:bg-muted flex items-center gap-2"
+                    >
+                      <MoreHorizontal className="w-4 h-4" />
+                      Edit post
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowDeleteMenu(false);
+                        handleDelete();
+                      }}
+                      className="w-full text-left px-4 py-3 hover:bg-destructive/10 text-destructive flex items-center gap-2"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Delete post
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
           </div>
 

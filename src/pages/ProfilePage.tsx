@@ -15,7 +15,7 @@ import { useInfiniteScroll } from '@/hooks/useInfiniteScroll';
 
 const PAGE_SIZE = 10;
 
-type ProfileTab = 'posts' | 'media' | 'likes' | 'reposts';
+type ProfileTab = 'posts' | 'media' | 'likes' | 'reposts' | 'bookmarks';
 
 export default function ProfilePage() {
   const { username } = useParams();
@@ -106,6 +106,9 @@ export default function ProfilePage() {
         case 'reposts':
           data = await fetchReposts(pageNum, profile.id);
           break;
+        case 'bookmarks':
+          data = await fetchBookmarks(pageNum, profile.id);
+          break;
       }
 
       if (pageNum === 0) {
@@ -184,6 +187,24 @@ export default function ProfilePage() {
 
     if (error) throw error;
     return (data || []).map((repost: any) => repost.posts).filter(Boolean);
+  };
+
+  const fetchBookmarks = async (pageNum: number, userId: string): Promise<Post[]> => {
+    const { data, error } = await supabase
+      .from('bookmarks')
+      .select(`
+        post_id,
+        posts (
+          *,
+          user_profiles (*)
+        )
+      `)
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .range(pageNum * PAGE_SIZE, (pageNum + 1) * PAGE_SIZE - 1);
+
+    if (error) throw error;
+    return (data || []).map((bookmark: any) => bookmark.posts).filter(Boolean);
   };
 
   const loadMore = async (): Promise<boolean> => {
@@ -329,6 +350,21 @@ export default function ProfilePage() {
               </span>
             </div>
 
+            {profile.website && (
+              <a 
+                href={profile.website} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-primary hover:underline text-sm"
+              >
+                {profile.website}
+              </a>
+            )}
+
+            {profile.location && (
+              <p className="text-sm text-muted-foreground">{profile.location}</p>
+            )}
+
             <div className="flex space-x-4">
               <div>
                 <span className="font-bold text-foreground">{formatNumber(profile.following_count)}</span>{' '}
@@ -385,6 +421,18 @@ export default function ProfilePage() {
           >
             Likes
           </button>
+          {isOwnProfile && (
+            <button
+              onClick={() => setActiveTab('bookmarks')}
+              className={`flex-1 py-4 font-semibold transition-colors border-b-2 ${
+                activeTab === 'bookmarks'
+                  ? 'border-primary text-foreground'
+                  : 'border-transparent text-muted-foreground hover:bg-muted/5'
+              }`}
+            >
+              Bookmarks
+            </button>
+          )}
         </div>
       </div>
 
