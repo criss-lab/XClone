@@ -20,11 +20,15 @@ export default function ExplorePage() {
 
   const fetchTrending = async () => {
     try {
+      // First refresh trending topics from real data
+      await supabase.rpc('refresh_trending_topics');
+      
+      // Then fetch the updated trending topics
       const { data, error } = await supabase
         .from('trending_topics')
         .select('*')
         .order('posts_count', { ascending: false })
-        .limit(20);
+        .limit(50);
 
       if (error) throw error;
       setTrending(data || []);
@@ -41,8 +45,10 @@ export default function ExplorePage() {
   };
 
   const filteredTrending = activeTab === 'For You' 
-    ? trending 
-    : trending.filter((t) => t.category.toLowerCase().includes(activeTab.toLowerCase()));
+    ? trending.slice(0, 20)
+    : activeTab === 'Trending'
+      ? trending.slice(0, 20)
+      : trending.filter((t) => t.category.toLowerCase() === activeTab.toLowerCase()).slice(0, 20);
 
   return (
     <div className="min-h-screen bg-background pb-16 md:pb-0">

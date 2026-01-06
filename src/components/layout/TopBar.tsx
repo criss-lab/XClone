@@ -1,6 +1,8 @@
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Settings } from 'lucide-react';
+import { ThemeToggle } from './ThemeToggle';
+import { MobileSidebarDrawer } from './MobileSidebarDrawer';
 
 interface TopBarProps {
   title: string;
@@ -16,6 +18,11 @@ export function TopBar({ title, showProfile = true, showBack = false, showSettin
   return (
     <div className="sticky top-0 z-40 bg-background/95 backdrop-blur-sm border-b border-border">
       <div className="flex items-center justify-between px-4 h-14">
+        {/* Mobile Sidebar Drawer - Only visible on mobile */}
+        <div className="lg:hidden">
+          <MobileSidebarDrawer />
+        </div>
+
         <div className="flex items-center space-x-4">
           {showBack && (
             <button onClick={() => navigate(-1)} className="p-2 hover:bg-muted rounded-full">
@@ -24,7 +31,11 @@ export function TopBar({ title, showProfile = true, showBack = false, showSettin
           )}
           <h1 className="text-xl font-bold">{title}</h1>
         </div>
+        
         <div className="flex items-center space-x-2">
+          {/* Theme Toggle */}
+          <ThemeToggle />
+          
           {showSettings && (
             <button className="p-2 hover:bg-muted rounded-full">
               <Settings className="w-5 h-5" />

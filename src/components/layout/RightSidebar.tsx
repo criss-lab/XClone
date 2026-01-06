@@ -47,6 +47,9 @@ export function RightSidebar() {
   }, []);
 
   const fetchTrending = async () => {
+    // Refresh trending from real posts
+    await supabase.rpc('refresh_trending_topics');
+    
     const { data } = await supabase
       .from('trending_topics')
       .select('*')
