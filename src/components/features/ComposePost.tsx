@@ -20,7 +20,7 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [content, setContent] = useState('');
-  const [image, setImage] = useState<File | null>(null);
+  const [images, setImages] = useState<File[]>([]);
   const [video, setVideo] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [showPollDialog, setShowPollDialog] = useState(false);
@@ -45,20 +45,40 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
   }
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files?.[0]) {
-      const file = e.target.files[0];
-      if (file.size > 5 * 1024 * 1024) {
-        toast({
-          title: 'Error',
-          description: 'Image must be less than 5MB',
-          variant: 'destructive',
-        });
+    if (e.target.files) {
+      const files = Array.from(e.target.files);
+      
+      // Check if adding these would exceed 4 images
+      if (images.length + files.length > 4) {
+        sonnerToast.error('Maximum 4 images per post');
         return;
       }
-      setImage(file);
-      setVideo(null);
-      setGifUrl(null);
+
+      // Validate each file
+      const validFiles: File[] = [];
+      for (const file of files) {
+        if (file.size > 20 * 1024 * 1024) {
+          sonnerToast.error(`${file.name} exceeds 20MB limit`);
+          continue;
+        }
+        if (!file.type.startsWith('image/')) {
+          sonnerToast.error(`${file.name} is not a valid image`);
+          continue;
+        }
+        validFiles.push(file);
+      }
+
+      if (validFiles.length > 0) {
+        setImages([...images, ...validFiles].slice(0, 4));
+        setVideo(null);
+        setGifUrl(null);
+        sonnerToast.success(`${validFiles.length} image(s) added`);
+      }
     }
+  };
+
+  const removeImage = (index: number) => {
+    setImages(images.filter((_, i) => i !== index));
   };
 
   const handleVideoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -71,11 +91,9 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
         return;
       }
       
-      // Check file size (50MB for premium, 10MB for free)
-      const maxSize = user?.creator_tier !== 'free' ? 50 * 1024 * 1024 : 10 * 1024 * 1024;
-      if (file.size > maxSize) {
-        const sizeMB = (maxSize / (1024 * 1024)).toFixed(0);
-        sonnerToast.error(`Video must be less than ${sizeMB}MB. ${user?.creator_tier === 'free' ? 'Upgrade to Premium for larger uploads!' : ''}`);
+      // Check file size (20MB limit)
+      if (file.size > 20 * 1024 * 1024) {
+        sonnerToast.error('Video must be less than 20MB');
         return;
       }
       
@@ -95,7 +113,7 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
         }
         
         setVideo(file);
-        setImage(null);
+        setImages([]);
         setGifUrl(null);
         sonnerToast.success('Video ready to upload!');
       };
@@ -125,33 +143,48 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
   };
 
   const handlePost = async () => {
-    if (!content.trim() && !image && !video && !gifUrl && !pollData) return;
+    if (!content.trim() && images.length === 0 && !video && !gifUrl && !pollData) return;
 
     setLoading(true);
 
     try {
-      let imageUrl = null;
+      let imageUrls: string[] = [];
       let videoUrl = null;
       let isVideo = false;
 
-      if (image) {
-        const fileExt = image.name.split('.').pop();
-        const fileName = `${user.id}/${Date.now()}.${fileExt}`;
+      // Upload multiple images
+      if (images.length > 0) {
+        sonnerToast.loading(`Uploading ${images.length} image(s)...`);
         
-        const { error: uploadError } = await supabase.storage
-          .from('posts')
-          .upload(fileName, image, {
-            cacheControl: '3600',
-            upsert: false,
-          });
+        for (let i = 0; i < images.length; i++) {
+          const image = images[i];
+          const fileExt = image.name.split('.').pop();
+          const fileName = `${user.id}/${Date.now()}_${i}.${fileExt}`;
+          
+          const { error: uploadError } = await supabase.storage
+            .from('posts')
+            .upload(fileName, image, {
+              cacheControl: '3600',
+              upsert: false,
+            });
 
-        if (uploadError) throw uploadError;
+          if (uploadError) {
+            console.error('Image upload error:', uploadError);
+            sonnerToast.error(`Failed to upload image ${i + 1}`);
+            continue;
+          }
 
-        const { data: { publicUrl } } = supabase.storage
-          .from('posts')
-          .getPublicUrl(fileName);
+          const { data: { publicUrl } } = supabase.storage
+            .from('posts')
+            .getPublicUrl(fileName);
 
-        imageUrl = publicUrl;
+          imageUrls.push(publicUrl);
+        }
+        
+        sonnerToast.dismiss();
+        if (imageUrls.length > 0) {
+          sonnerToast.success(`${imageUrls.length} image(s) uploaded successfully!`);
+        }
       }
 
       if (video) {
@@ -160,7 +193,6 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
         const fileExt = video.name.split('.').pop();
         const fileName = `videos/${user.id}/${Date.now()}.${fileExt}`;
         
-        // Upload with progress tracking
         const { data: uploadData, error: uploadError } = await supabase.storage
           .from('posts')
           .upload(fileName, video, {
@@ -189,7 +221,7 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
         const { error: scheduleError } = await supabase.from('scheduled_posts').insert({
           user_id: user.id,
           content: content.trim(),
-          image_url: imageUrl || gifUrl,
+          image_url: imageUrls.length > 0 ? imageUrls[0] : (gifUrl || null),
           video_url: videoUrl,
           scheduled_for: scheduledDate.toISOString(),
           status: 'pending'
@@ -198,7 +230,7 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
         if (scheduleError) throw scheduleError;
 
         setContent('');
-        setImage(null);
+        setImages([]);
         setVideo(null);
         setPollData(null);
         setGifUrl(null);
@@ -213,7 +245,9 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
       const { data: postData, error } = await supabase.from('posts').insert({
         user_id: user.id,
         content: content.trim(),
-        image_url: imageUrl || gifUrl,
+        image_url: imageUrls.length > 0 ? imageUrls[0] : (gifUrl || null), // Legacy single image field
+        media_urls: imageUrls.length > 0 ? imageUrls : [],
+        media_count: imageUrls.length,
         video_url: videoUrl,
         is_video: isVideo,
         community_id: communityId || null
@@ -265,7 +299,7 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
       }
 
       setContent('');
-      setImage(null);
+      setImages([]);
       setVideo(null);
       setPollData(null);
       setGifUrl(null);
@@ -308,21 +342,38 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
             className="min-h-[80px] border-0 resize-none focus-visible:ring-0 p-0 text-lg bg-transparent w-full"
             maxLength={700}
           />
-          {image && (
-            <div className="mt-2 relative rounded-2xl overflow-hidden max-w-full">
-              <img
-                src={URL.createObjectURL(image)}
-                alt="Upload preview"
-                className="max-h-96 w-full object-cover"
-              />
-              <button
-                onClick={() => setImage(null)}
-                className="absolute top-2 right-2 bg-black/80 hover:bg-black text-white rounded-full w-8 h-8 flex items-center justify-center transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
+          
+          {/* Multiple Images Grid */}
+          {images.length > 0 && (
+            <div className={`mt-2 gap-2 ${
+              images.length === 1 ? 'grid grid-cols-1' :
+              images.length === 2 ? 'grid grid-cols-2' :
+              images.length === 3 ? 'grid grid-cols-2' :
+              'grid grid-cols-2'
+            }`}>
+              {images.map((image, index) => (
+                <div 
+                  key={index} 
+                  className={`relative rounded-2xl overflow-hidden ${
+                    images.length === 3 && index === 0 ? 'col-span-2' : ''
+                  }`}
+                >
+                  <img
+                    src={URL.createObjectURL(image)}
+                    alt={`Upload ${index + 1}`}
+                    className="w-full h-full object-cover max-h-96"
+                  />
+                  <button
+                    onClick={() => removeImage(index)}
+                    className="absolute top-2 right-2 bg-black/80 hover:bg-black text-white rounded-full w-8 h-8 flex items-center justify-center transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
             </div>
           )}
+
           {video && (
             <div className="mt-2 relative rounded-2xl overflow-hidden max-w-full">
               <video
@@ -415,9 +466,10 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
                 <input
                   type="file"
                   accept="image/*"
+                  multiple
                   className="hidden"
                   onChange={handleImageChange}
-                  disabled={loading || !!video || !!gifUrl}
+                  disabled={loading || !!video || !!gifUrl || images.length >= 4}
                 />
               </label>
               <label className="cursor-pointer p-2 hover:bg-primary/10 rounded-full text-primary transition-colors flex-shrink-0">
@@ -427,12 +479,12 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
                   accept="video/*"
                   className="hidden"
                   onChange={handleVideoChange}
-                  disabled={loading || !!image || !!gifUrl}
+                  disabled={loading || images.length > 0 || !!gifUrl}
                 />
               </label>
               <button
                 onClick={() => setShowGifPicker(!showGifPicker)}
-                disabled={loading || !!image || !!video}
+                disabled={loading || images.length > 0 || !!video}
                 className="cursor-pointer p-2 hover:bg-primary/10 rounded-full text-primary transition-colors disabled:opacity-50 flex-shrink-0"
               >
                 <Smile className="w-5 h-5" />
@@ -463,6 +515,11 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
               </button>
             </div>
             <div className="flex items-center space-x-3 flex-shrink-0">
+              {images.length > 0 && (
+                <span className="text-sm text-muted-foreground">
+                  {images.length}/4 images
+                </span>
+              )}
               {content.length > 0 && (
                 <span className={`text-sm ${content.length > 680 ? 'text-destructive' : 'text-muted-foreground'}`}>
                   {content.length}/700
@@ -470,7 +527,7 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
               )}
               <Button
                 onClick={handlePost}
-                disabled={loading || (!content.trim() && !image && !video && !gifUrl && !pollData) || content.length > 700}
+                disabled={loading || (!content.trim() && images.length === 0 && !video && !gifUrl && !pollData) || content.length > 700}
                 className="rounded-full px-6 font-semibold"
               >
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Post'}

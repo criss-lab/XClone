@@ -30,6 +30,13 @@ export function PostCard({ post, onUpdate }: PostCardProps) {
   const [showDeleteMenu, setShowDeleteMenu] = useState(false);
   const [poll, setPoll] = useState<any>(null);
 
+  // Get media URLs (support both legacy single image and new multi-image)
+  const mediaUrls = post.media_urls && post.media_urls.length > 0 
+    ? post.media_urls 
+    : post.image_url 
+      ? [post.image_url] 
+      : [];
+
   // Fetch poll if it exists
   useEffect(() => {
     const fetchPoll = async () => {
@@ -347,9 +354,28 @@ export function PostCard({ post, onUpdate }: PostCardProps) {
             }}
           />
 
-          {post.image_url && (
-            <div className="mt-3 rounded-2xl overflow-hidden border border-border">
-              <img src={post.image_url} alt="Post" className="w-full" />
+          {/* Multi-Image Grid */}
+          {mediaUrls.length > 0 && (
+            <div className={`mt-3 gap-2 rounded-2xl overflow-hidden ${
+              mediaUrls.length === 1 ? 'grid grid-cols-1' :
+              mediaUrls.length === 2 ? 'grid grid-cols-2' :
+              mediaUrls.length === 3 ? 'grid grid-cols-2' :
+              'grid grid-cols-2'
+            }`}>
+              {mediaUrls.map((url: string, index: number) => (
+                <div 
+                  key={index}
+                  className={`relative overflow-hidden ${
+                    mediaUrls.length === 3 && index === 0 ? 'col-span-2' : ''
+                  }`}
+                >
+                  <img 
+                    src={url} 
+                    alt={`Post media ${index + 1}`} 
+                    className="w-full h-full object-cover max-h-96" 
+                  />
+                </div>
+              ))}
             </div>
           )}
 
