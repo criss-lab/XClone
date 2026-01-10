@@ -4,20 +4,14 @@ import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
-import { Bell, Lock, Eye, Shield, HelpCircle, FileText, LogOut, Trash2, AlertTriangle } from 'lucide-react';
+import { Bell, Lock, Eye, Shield, HelpCircle, FileText, LogOut } from 'lucide-react';
 import { authService } from '@/lib/auth';
-import { supabase } from '@/lib/supabase';
-import { useToast } from '@/hooks/use-toast';
 
 export default function SettingsPage() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const { toast } = useToast();
   const [notifications, setNotifications] = useState(true);
   const [privateAccount, setPrivateAccount] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [deleteConfirmText, setDeleteConfirmText] = useState('');
-  const [deleting, setDeleting] = useState(false);
 
   if (!user) {
     navigate('/auth');
@@ -28,49 +22,6 @@ export default function SettingsPage() {
     await authService.signOut();
     logout();
     navigate('/');
-  };
-
-  const handleDeleteAccount = async () => {
-    if (deleteConfirmText !== 'DELETE') {
-      toast({
-        title: 'Invalid confirmation',
-        description: 'Please type DELETE to confirm',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    setDeleting(true);
-
-    try {
-      // Delete user data (RLS policies will cascade delete related records)
-      const { error: deleteError } = await supabase
-        .from('user_profiles')
-        .delete()
-        .eq('id', user?.id);
-
-      if (deleteError) throw deleteError;
-
-      // Sign out
-      await authService.signOut();
-      logout();
-      
-      toast({
-        title: 'Account deleted',
-        description: 'Your account and all data have been permanently deleted',
-      });
-
-      navigate('/');
-    } catch (error: any) {
-      console.error('Error deleting account:', error);
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to delete account',
-        variant: 'destructive',
-      });
-    } finally {
-      setDeleting(false);
-    }
   };
 
   return (
@@ -127,87 +78,20 @@ export default function SettingsPage() {
         <div className="p-4">
           <h2 className="text-lg font-bold mb-4">Privacy & Security</h2>
           <div className="space-y-2">
-            <button 
-              onClick={() => window.open('/privacy-policy', '_blank')}
-              className="flex items-center gap-3 w-full p-3 hover:bg-muted rounded-lg text-left"
-            >
+            <button className="flex items-center gap-3 w-full p-3 hover:bg-muted rounded-lg text-left">
               <Shield className="w-5 h-5 text-muted-foreground" />
               <div>
                 <p className="font-semibold">Privacy Policy</p>
                 <p className="text-sm text-muted-foreground">Learn how we protect your data</p>
               </div>
             </button>
-            <button 
-              onClick={() => window.open('/terms-of-service', '_blank')}
-              className="flex items-center gap-3 w-full p-3 hover:bg-muted rounded-lg text-left"
-            >
+            <button className="flex items-center gap-3 w-full p-3 hover:bg-muted rounded-lg text-left">
               <FileText className="w-5 h-5 text-muted-foreground" />
               <div>
                 <p className="font-semibold">Terms of Service</p>
                 <p className="text-sm text-muted-foreground">Read our terms and conditions</p>
               </div>
             </button>
-          </div>
-        </div>
-
-        {/* Danger Zone */}
-        <div className="p-4">
-          <h2 className="text-lg font-bold mb-4 text-destructive">Danger Zone</h2>
-          <div className="border border-destructive/30 rounded-lg p-4 bg-destructive/5">
-            <div className="flex items-start gap-3 mb-4">
-              <AlertTriangle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="font-semibold text-destructive">Delete Account</p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Permanently delete your account and all associated data. This action cannot be undone.
-                </p>
-              </div>
-            </div>
-            {!showDeleteConfirm ? (
-              <Button
-                onClick={() => setShowDeleteConfirm(true)}
-                variant="destructive"
-                className="w-full"
-              >
-                <Trash2 className="w-4 h-4 mr-2" />
-                Delete My Account
-              </Button>
-            ) : (
-              <div className="space-y-3">
-                <div>
-                  <label className="text-sm font-semibold mb-2 block">
-                    Type <span className="text-destructive font-mono">DELETE</span> to confirm:
-                  </label>
-                  <input
-                    type="text"
-                    value={deleteConfirmText}
-                    onChange={(e) => setDeleteConfirmText(e.target.value)}
-                    className="w-full px-3 py-2 border border-border rounded-md bg-background"
-                    placeholder="DELETE"
-                  />
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    onClick={() => {
-                      setShowDeleteConfirm(false);
-                      setDeleteConfirmText('');
-                    }}
-                    variant="outline"
-                    className="flex-1"
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    onClick={handleDeleteAccount}
-                    variant="destructive"
-                    className="flex-1"
-                    disabled={deleteConfirmText !== 'DELETE' || deleting}
-                  >
-                    {deleting ? 'Deleting...' : 'Confirm Delete'}
-                  </Button>
-                </div>
-              </div>
-            )}
           </div>
         </div>
 

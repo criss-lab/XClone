@@ -33,8 +33,6 @@ import PremiumPage from '@/pages/PremiumPage';
 import LiveStreamPage from '@/pages/LiveStreamPage';
 import StartStreamPage from '@/pages/StartStreamPage';
 import SettingsPage from '@/pages/SettingsPage';
-import HistoryPage from '@/pages/HistoryPage';
-import HelpPage from '@/pages/HelpPage';
 
 export default function App() {
   return (
@@ -71,8 +69,6 @@ export default function App() {
               <Route path="/stream/:streamId" element={<LiveStreamPage />} />
               <Route path="/start-stream" element={<StartStreamPage />} />
               <Route path="/settings" element={<SettingsPage />} />
-              <Route path="/history" element={<HistingsPage />} />
-              <Route path="/help" element={<HelpPage />} />
             </Routes>
           </main>
           <RightSidebar />

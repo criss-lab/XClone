@@ -152,7 +152,6 @@ export function VideoPlayer({ post, isActive, onUpdate }: VideoPlayerProps) {
         src={post.video_url || ''}
         loop
         playsInline
-        autoPlay
         muted={isMuted}
         className="h-full w-full object-cover"
         onClick={togglePlay}
