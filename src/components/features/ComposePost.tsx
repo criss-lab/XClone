@@ -20,8 +20,8 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [content, setContent] = useState('');
-  const [images, setImages] = useState<File[]>([]);
-  const [video, setVideo] = useState<File | null>(null);
+  const [mediaFiles, setMediaFiles] = useState<File[]>([]);
+  const [mediaTypes, setMediaTypes] = useState<('image' | 'video')[]>([]);
   const [loading, setLoading] = useState(false);
   const [showPollDialog, setShowPollDialog] = useState(false);
   const [pollData, setPollData] = useState<any>(null);
@@ -44,85 +44,56 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
     );
   }
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const files = Array.from(e.target.files);
-      
-      // Check if adding these would exceed 4 images
-      if (images.length + files.length > 4) {
-        sonnerToast.error('Maximum 4 images per post');
-        return;
-      }
+  const handleMediaChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'image' | 'video') => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
 
-      // Validate each file
-      const validFiles: File[] = [];
-      for (const file of files) {
-        if (file.size > 20 * 1024 * 1024) {
-          sonnerToast.error(`${file.name} exceeds 20MB limit`);
-          continue;
-        }
-        if (!file.type.startsWith('image/')) {
-          sonnerToast.error(`${file.name} is not a valid image`);
-          continue;
-        }
-        validFiles.push(file);
-      }
+    // Check if mixing images and videos
+    const hasVideo = mediaTypes.includes('video');
+    const hasImage = mediaTypes.includes('image');
+    const isVideo = type === 'video';
 
-      if (validFiles.length > 0) {
-        setImages([...images, ...validFiles].slice(0, 4));
-        setVideo(null);
-        setGifUrl(null);
-        sonnerToast.success(`${validFiles.length} image(s) added`);
-      }
+    if ((hasVideo && !isVideo) || (hasImage && isVideo)) {
+      sonnerToast.error('You can only upload images OR videos, not both');
+      return;
     }
+
+    // Limit: videos to 1, images to 4
+    const maxFiles = isVideo ? 1 : 4;
+    const validFiles = files.slice(0, maxFiles - mediaFiles.length);
+
+    // Check file sizes (20MB limit)
+    const oversizedFiles = validFiles.filter((file) => file.size > 20 * 1024 * 1024);
+    if (oversizedFiles.length > 0) {
+      sonnerToast.error('Maximum file size is 20MB');
+      return;
+    }
+
+    // Validate file types
+    const invalidFiles = validFiles.filter((file) => {
+      if (isVideo) {
+        return !file.type.startsWith('video/');
+      } else {
+        return !file.type.startsWith('image/');
+      }
+    });
+
+    if (invalidFiles.length > 0) {
+      sonnerToast.error(`Invalid file type. Please select ${isVideo ? 'video' : 'image'} files only.`);
+      return;
+    }
+
+    const newTypes = validFiles.map(() => type);
+
+    setMediaFiles((prev) => [...prev, ...validFiles]);
+    setMediaTypes((prev) => [...prev, ...newTypes]);
+    setGifUrl(null);
+    sonnerToast.success(`${validFiles.length} ${type}(s) added`);
   };
 
-  const removeImage = (index: number) => {
-    setImages(images.filter((_, i) => i !== index));
-  };
-
-  const handleVideoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files?.[0]) {
-      const file = e.target.files[0];
-      
-      // Check file type
-      if (!file.type.startsWith('video/')) {
-        sonnerToast.error('Please select a valid video file');
-        return;
-      }
-      
-      // Check file size (20MB limit)
-      if (file.size > 20 * 1024 * 1024) {
-        sonnerToast.error('Video must be less than 20MB');
-        return;
-      }
-      
-      // Preview video before setting
-      const videoUrl = URL.createObjectURL(file);
-      const videoElement = document.createElement('video');
-      videoElement.src = videoUrl;
-      
-      videoElement.onloadedmetadata = () => {
-        // Check video duration (max 10 minutes for free users)
-        const maxDuration = user?.creator_tier !== 'free' ? 3600 : 600; // 1 hour for premium, 10 min for free
-        if (videoElement.duration > maxDuration) {
-          const maxMin = Math.floor(maxDuration / 60);
-          sonnerToast.error(`Video duration cannot exceed ${maxMin} minutes`);
-          URL.revokeObjectURL(videoUrl);
-          return;
-        }
-        
-        setVideo(file);
-        setImages([]);
-        setGifUrl(null);
-        sonnerToast.success('Video ready to upload!');
-      };
-      
-      videoElement.onerror = () => {
-        sonnerToast.error('Failed to load video. Please try a different file.');
-        URL.revokeObjectURL(videoUrl);
-      };
-    }
+  const removeMedia = (index: number) => {
+    setMediaFiles((prev) => prev.filter((_, i) => i !== index));
+    setMediaTypes((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handlePollCreated = (data: { question: string; options: string[]; duration: number }) => {
@@ -143,34 +114,36 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
   };
 
   const handlePost = async () => {
-    if (!content.trim() && images.length === 0 && !video && !gifUrl && !pollData) return;
+    if (!content.trim() && mediaFiles.length === 0 && !gifUrl && !pollData) return;
 
     setLoading(true);
 
     try {
-      let imageUrls: string[] = [];
+      let mediaUrls: string[] = [];
       let videoUrl = null;
       let isVideo = false;
 
-      // Upload multiple images
-      if (images.length > 0) {
-        sonnerToast.loading(`Uploading ${images.length} image(s)...`);
+      // Upload media files
+      if (mediaFiles.length > 0) {
+        sonnerToast.loading(`Uploading ${mediaFiles.length} file(s)...`);
         
-        for (let i = 0; i < images.length; i++) {
-          const image = images[i];
-          const fileExt = image.name.split('.').pop();
-          const fileName = `${user.id}/${Date.now()}_${i}.${fileExt}`;
+        for (let i = 0; i < mediaFiles.length; i++) {
+          const file = mediaFiles[i];
+          const fileExt = file.name.split('.').pop();
+          const isVideoFile = mediaTypes[i] === 'video';
+          const folder = isVideoFile ? 'videos' : '';
+          const fileName = `${folder}${user.id}/${Date.now()}_${i}.${fileExt}`;
           
           const { error: uploadError } = await supabase.storage
             .from('posts')
-            .upload(fileName, image, {
+            .upload(fileName, file, {
               cacheControl: '3600',
               upsert: false,
             });
 
           if (uploadError) {
-            console.error('Image upload error:', uploadError);
-            sonnerToast.error(`Failed to upload image ${i + 1}`);
+            console.error('Upload error:', uploadError);
+            sonnerToast.error(`Failed to upload file ${i + 1}`);
             continue;
           }
 
@@ -178,42 +151,16 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
             .from('posts')
             .getPublicUrl(fileName);
 
-          imageUrls.push(publicUrl);
+          if (isVideoFile) {
+            videoUrl = publicUrl;
+            isVideo = true;
+          } else {
+            mediaUrls.push(publicUrl);
+          }
         }
         
         sonnerToast.dismiss();
-        if (imageUrls.length > 0) {
-          sonnerToast.success(`${imageUrls.length} image(s) uploaded successfully!`);
-        }
-      }
-
-      if (video) {
-        sonnerToast.loading('Uploading video...');
-        
-        const fileExt = video.name.split('.').pop();
-        const fileName = `videos/${user.id}/${Date.now()}.${fileExt}`;
-        
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from('posts')
-          .upload(fileName, video, {
-            cacheControl: '3600',
-            upsert: false,
-          });
-
-        if (uploadError) {
-          console.error('Video upload error:', uploadError);
-          sonnerToast.error(`Upload failed: ${uploadError.message}`);
-          throw uploadError;
-        }
-
-        const { data: { publicUrl } } = supabase.storage
-          .from('posts')
-          .getPublicUrl(fileName);
-
-        videoUrl = publicUrl;
-        isVideo = true;
-        sonnerToast.dismiss();
-        sonnerToast.success('Video uploaded successfully!');
+        sonnerToast.success('Upload complete!');
       }
 
       // If scheduled, create scheduled_post instead
@@ -221,7 +168,7 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
         const { error: scheduleError } = await supabase.from('scheduled_posts').insert({
           user_id: user.id,
           content: content.trim(),
-          image_url: imageUrls.length > 0 ? imageUrls[0] : (gifUrl || null),
+          image_url: mediaUrls.length > 0 ? mediaUrls[0] : (gifUrl || null),
           video_url: videoUrl,
           scheduled_for: scheduledDate.toISOString(),
           status: 'pending'
@@ -230,8 +177,8 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
         if (scheduleError) throw scheduleError;
 
         setContent('');
-        setImages([]);
-        setVideo(null);
+        setMediaFiles([]);
+        setMediaTypes([]);
         setPollData(null);
         setGifUrl(null);
         setScheduledDate(null);
@@ -245,9 +192,9 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
       const { data: postData, error } = await supabase.from('posts').insert({
         user_id: user.id,
         content: content.trim(),
-        image_url: imageUrls.length > 0 ? imageUrls[0] : (gifUrl || null), // Legacy single image field
-        media_urls: imageUrls.length > 0 ? imageUrls : [],
-        media_count: imageUrls.length,
+        image_url: mediaUrls.length > 0 ? mediaUrls[0] : (gifUrl || null), // Legacy single image field
+        media_urls: mediaUrls.length > 0 ? mediaUrls : [],
+        media_count: mediaUrls.length,
         video_url: videoUrl,
         is_video: isVideo,
         community_id: communityId || null
@@ -299,8 +246,8 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
       }
 
       setContent('');
-      setImages([]);
-      setVideo(null);
+      setMediaFiles([]);
+      setMediaTypes([]);
       setPollData(null);
       setGifUrl(null);
       setScheduledDate(null);
@@ -318,6 +265,9 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
       setLoading(false);
     }
   };
+
+  const hasVideo = mediaTypes.includes('video');
+  const hasImage = mediaTypes.includes('image');
 
   return (
     <div className="border-b border-border p-4">
@@ -343,28 +293,38 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
             maxLength={700}
           />
           
-          {/* Multiple Images Grid */}
-          {images.length > 0 && (
+          {/* Media Grid */}
+          {mediaFiles.length > 0 && (
             <div className={`mt-2 gap-2 ${
-              images.length === 1 ? 'grid grid-cols-1' :
-              images.length === 2 ? 'grid grid-cols-2' :
-              images.length === 3 ? 'grid grid-cols-2' :
+              mediaFiles.length === 1 ? 'grid grid-cols-1' :
+              mediaFiles.length === 2 ? 'grid grid-cols-2' :
+              mediaFiles.length === 3 ? 'grid grid-cols-2' :
               'grid grid-cols-2'
             }`}>
-              {images.map((image, index) => (
+              {mediaFiles.map((file, index) => (
                 <div 
                   key={index} 
                   className={`relative rounded-2xl overflow-hidden ${
-                    images.length === 3 && index === 0 ? 'col-span-2' : ''
+                    mediaFiles.length === 3 && index === 0 ? 'col-span-2' : ''
                   }`}
                 >
-                  <img
-                    src={URL.createObjectURL(image)}
-                    alt={`Upload ${index + 1}`}
-                    className="w-full h-full object-cover max-h-96"
-                  />
+                  {mediaTypes[index] === 'video' ? (
+                    <video
+                      src={URL.createObjectURL(file)}
+                      controls
+                      autoPlay
+                      muted
+                      className="w-full h-full object-cover max-h-96"
+                    />
+                  ) : (
+                    <img
+                      src={URL.createObjectURL(file)}
+                      alt={`Upload ${index + 1}`}
+                      className="w-full h-full object-cover max-h-96"
+                    />
+                  )}
                   <button
-                    onClick={() => removeImage(index)}
+                    onClick={() => removeMedia(index)}
                     className="absolute top-2 right-2 bg-black/80 hover:bg-black text-white rounded-full w-8 h-8 flex items-center justify-center transition-colors"
                   >
                     <X className="w-4 h-4" />
@@ -374,21 +334,6 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
             </div>
           )}
 
-          {video && (
-            <div className="mt-2 relative rounded-2xl overflow-hidden max-w-full">
-              <video
-                src={URL.createObjectURL(video)}
-                controls
-                className="max-h-96 w-full"
-              />
-              <button
-                onClick={() => setVideo(null)}
-                className="absolute top-2 right-2 bg-black/80 hover:bg-black text-white rounded-full w-8 h-8 flex items-center justify-center transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          )}
           {pollData && (
             <div className="mt-2 p-3 border border-border rounded-lg">
               <div className="flex items-center justify-between mb-2">
@@ -406,6 +351,7 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
               <p className="text-sm text-muted-foreground break-words">{pollData.question}</p>
             </div>
           )}
+          
           {scheduledDate && (
             <div className="mt-2 p-3 border border-border rounded-lg bg-primary/5">
               <div className="flex items-center justify-between mb-1">
@@ -425,6 +371,7 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
               </p>
             </div>
           )}
+          
           {taggedProducts.length > 0 && (
             <div className="mt-2 p-3 border border-border rounded-lg">
               <div className="flex items-center justify-between mb-2">
@@ -439,15 +386,9 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
                   Remove
                 </button>
               </div>
-              <div className="flex flex-wrap gap-2">
-                {taggedProducts.map(product => (
-                  <div key={product.id} className="px-2 py-1 bg-muted rounded text-xs truncate">
-                    {product.name} - ${product.price}
-                  </div>
-                ))}
-              </div>
             </div>
           )}
+          
           {gifUrl && (
             <div className="mt-2 relative rounded-2xl overflow-hidden max-w-full">
               <img src={gifUrl} alt="GIF" className="max-h-96 w-full object-cover" />
@@ -459,32 +400,33 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
               </button>
             </div>
           )}
+          
           <div className="flex items-center justify-between mt-3 pt-3 border-t border-border overflow-x-auto">
             <div className="flex space-x-2">
-              <label className="cursor-pointer p-2 hover:bg-primary/10 rounded-full text-primary transition-colors flex-shrink-0">
+              <label className={`cursor-pointer p-2 hover:bg-primary/10 rounded-full text-primary transition-colors flex-shrink-0 ${(loading || hasVideo || !!gifUrl || hasImage && mediaFiles.length >= 4) ? 'opacity-50 cursor-not-allowed' : ''}`}>
                 <Image className="w-5 h-5" />
                 <input
                   type="file"
                   accept="image/*"
                   multiple
                   className="hidden"
-                  onChange={handleImageChange}
-                  disabled={loading || !!video || !!gifUrl || images.length >= 4}
+                  onChange={(e) => handleMediaChange(e, 'image')}
+                  disabled={loading || hasVideo || !!gifUrl || (hasImage && mediaFiles.length >= 4)}
                 />
               </label>
-              <label className="cursor-pointer p-2 hover:bg-primary/10 rounded-full text-primary transition-colors flex-shrink-0">
+              <label className={`cursor-pointer p-2 hover:bg-primary/10 rounded-full text-primary transition-colors flex-shrink-0 ${(loading || hasImage || !!gifUrl || hasVideo) ? 'opacity-50 cursor-not-allowed' : ''}`}>
                 <Video className="w-5 h-5" />
                 <input
                   type="file"
                   accept="video/*"
                   className="hidden"
-                  onChange={handleVideoChange}
-                  disabled={loading || images.length > 0 || !!gifUrl}
+                  onChange={(e) => handleMediaChange(e, 'video')}
+                  disabled={loading || hasImage || !!gifUrl || hasVideo}
                 />
               </label>
               <button
                 onClick={() => setShowGifPicker(!showGifPicker)}
-                disabled={loading || images.length > 0 || !!video}
+                disabled={loading || mediaFiles.length > 0}
                 className="cursor-pointer p-2 hover:bg-primary/10 rounded-full text-primary transition-colors disabled:opacity-50 flex-shrink-0"
               >
                 <Smile className="w-5 h-5" />
@@ -493,7 +435,6 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
                 onClick={() => setShowPollDialog(true)}
                 disabled={loading || !!pollData}
                 className="cursor-pointer p-2 hover:bg-primary/10 rounded-full text-primary transition-colors disabled:opacity-50 flex-shrink-0"
-                title="Add poll"
               >
                 <BarChart3 className="w-5 h-5" />
               </button>
@@ -501,7 +442,6 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
                 onClick={() => setShowScheduleDialog(true)}
                 disabled={loading || !!scheduledDate}
                 className="cursor-pointer p-2 hover:bg-primary/10 rounded-full text-primary transition-colors disabled:opacity-50 flex-shrink-0"
-                title="Schedule post"
               >
                 <Calendar className="w-5 h-5" />
               </button>
@@ -509,15 +449,14 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
                 onClick={() => setShowProductDialog(true)}
                 disabled={loading}
                 className="cursor-pointer p-2 hover:bg-primary/10 rounded-full text-primary transition-colors disabled:opacity-50 flex-shrink-0"
-                title="Tag products"
               >
                 <ShoppingBag className="w-5 h-5" />
               </button>
             </div>
             <div className="flex items-center space-x-3 flex-shrink-0">
-              {images.length > 0 && (
+              {hasImage && (
                 <span className="text-sm text-muted-foreground">
-                  {images.length}/4 images
+                  {mediaFiles.length}/4 images
                 </span>
               )}
               {content.length > 0 && (
@@ -527,13 +466,14 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
               )}
               <Button
                 onClick={handlePost}
-                disabled={loading || (!content.trim() && images.length === 0 && !video && !gifUrl && !pollData) || content.length > 700}
+                disabled={loading || (!content.trim() && mediaFiles.length === 0 && !gifUrl && !pollData) || content.length > 700}
                 className="rounded-full px-6 font-semibold"
               >
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Post'}
               </Button>
             </div>
           </div>
+          
           {showGifPicker && (
             <div className="mt-2 border border-border rounded-lg p-4">
               <p className="text-sm text-muted-foreground mb-3">Search for GIFs on Giphy.com or Tenor.com and paste the URL below:</p>
