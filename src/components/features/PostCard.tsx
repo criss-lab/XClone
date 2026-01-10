@@ -302,7 +302,7 @@ export function PostCard({ post, onUpdate }: PostCardProps) {
               </span>
             </div>
             {user?.id === post.user_id && (
-              <div className="relative">
+              <div className="relative flex-shrink-0">
                 <button 
                   className="text-muted-foreground hover:text-primary p-2 -mr-2"
                   onClick={(e) => {
@@ -314,30 +314,39 @@ export function PostCard({ post, onUpdate }: PostCardProps) {
                   <MoreHorizontal className="w-5 h-5" />
                 </button>
                 {showDeleteMenu && (
-                  <div className="absolute right-0 mt-2 w-48 bg-background border border-border rounded-lg shadow-lg z-50">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setShowEditDialog(true);
-                        setShowDeleteMenu(false);
-                      }}
-                      className="w-full text-left px-4 py-3 hover:bg-muted flex items-center gap-2"
-                    >
-                      <MoreHorizontal className="w-4 h-4" />
-                      Edit post
-                    </button>
-                    <button
+                  <>
+                    <div 
+                      className="fixed inset-0 z-40" 
                       onClick={(e) => {
                         e.stopPropagation();
                         setShowDeleteMenu(false);
-                        handleDelete();
                       }}
-                      className="w-full text-left px-4 py-3 hover:bg-destructive/10 text-destructive flex items-center gap-2"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                      Delete post
-                    </button>
-                  </div>
+                    />
+                    <div className="absolute right-0 mt-2 w-48 bg-background border border-border rounded-lg shadow-lg z-50">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowEditDialog(true);
+                          setShowDeleteMenu(false);
+                        }}
+                        className="w-full text-left px-4 py-3 hover:bg-muted flex items-center gap-2 rounded-t-lg"
+                      >
+                        <MoreHorizontal className="w-4 h-4" />
+                        Edit post
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowDeleteMenu(false);
+                          handleDelete();
+                        }}
+                        className="w-full text-left px-4 py-3 hover:bg-destructive/10 text-destructive flex items-center gap-2 rounded-b-lg"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        Delete post
+                      </button>
+                    </div>
+                  </>
                 )}
               </div>
             )}

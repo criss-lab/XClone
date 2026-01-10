@@ -11,20 +11,31 @@ export function ThemeToggle() {
     
     if (savedTheme) {
       setTheme(savedTheme);
-      document.documentElement.classList.toggle('dark', savedTheme === 'dark');
+      applyTheme(savedTheme);
     } else {
       // Check system preference
       const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
       const defaultTheme = prefersDark ? 'dark' : 'light';
       setTheme(defaultTheme);
-      document.documentElement.classList.toggle('dark', prefersDark);
+      applyTheme(defaultTheme);
     }
   }, []);
+
+  const applyTheme = (newTheme: 'light' | 'dark') => {
+    const root = document.documentElement;
+    if (newTheme === 'dark') {
+      root.classList.add('dark');
+      root.style.colorScheme = 'dark';
+    } else {
+      root.classList.remove('dark');
+      root.style.colorScheme = 'light';
+    }
+  };
 
   const toggleTheme = () => {
     const newTheme = theme === 'light' ? 'dark' : 'light';
     setTheme(newTheme);
-    document.documentElement.classList.toggle('dark', newTheme === 'dark');
+    applyTheme(newTheme);
     localStorage.setItem('theme', newTheme);
   };
 

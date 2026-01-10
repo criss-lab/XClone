@@ -32,6 +32,7 @@ import CreatorStudio from '@/pages/CreatorStudio';
 import PremiumPage from '@/pages/PremiumPage';
 import LiveStreamPage from '@/pages/LiveStreamPage';
 import StartStreamPage from '@/pages/StartStreamPage';
+import SettingsPage from '@/pages/SettingsPage';
 
 export default function App() {
   return (
@@ -67,6 +68,7 @@ export default function App() {
               <Route path="/premium" element={<PremiumPage />} />
               <Route path="/stream/:streamId" element={<LiveStreamPage />} />
               <Route path="/start-stream" element={<StartStreamPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
             </Routes>
           </main>
           <RightSidebar />
