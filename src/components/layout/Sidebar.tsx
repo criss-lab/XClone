@@ -1,7 +1,7 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
-import { Home, Search, Bell, Mail, User, Hash, Radio, LogOut, Plus, Users, TrendingUp, Sparkles, Bookmark, List, DollarSign, BarChart3, ShoppingBag, Calendar, Crown, Briefcase, Settings, HelpCircle, History, ChevronDown, ChevronUp } from 'lucide-react';
+import { Home, Search, Bell, Mail, User, Hash, Radio, LogOut, Plus, Users, TrendingUp, Sparkles, Bookmark, List, DollarSign, BarChart3, ShoppingBag, Calendar, Crown, Briefcase, Settings, HelpCircle, History, ChevronDown, ChevronUp, FileText } from 'lucide-react';
 import { authService } from '@/lib/auth';
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
@@ -63,6 +63,7 @@ export function Sidebar() {
   const navItems = [
     { icon: Home, label: 'Home', path: '/', requireAuth: false },
     { icon: Hash, label: 'Explore', path: '/explore', requireAuth: false },
+    { icon: FileText, label: 'Threads', path: '/threads', requireAuth: false },
     { icon: Bell, label: 'Notifications', path: '/notifications', requireAuth: true },
     { icon: Mail, label: 'Messages', path: '/messages', requireAuth: true },
     { icon: Radio, label: 'Spaces', path: '/spaces', requireAuth: false },

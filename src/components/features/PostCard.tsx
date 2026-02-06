@@ -1,4 +1,4 @@
-import { Heart, MessageCircle, Repeat2, Share, MoreHorizontal, BadgeCheck, Trash2 } from 'lucide-react';
+import { Heart, MessageCircle, Repeat2, Share, MoreHorizontal, BadgeCheck, Trash2, TrendingUp } from 'lucide-react';
 import { Post } from '@/types';
 import { formatDistanceToNow } from 'date-fns';
 import { useState, useEffect } from 'react';
@@ -11,6 +11,7 @@ import { SharePostDialog } from './SharePostDialog';
 import { BookmarkButton } from './BookmarkButton';
 import { PollCard } from './PollCard';
 import { EditPostDialog } from './EditPostDialog';
+import { BoostPostDialog } from './BoostPostDialog';
 
 interface PostCardProps {
   post: Post;
@@ -29,6 +30,7 @@ export function PostCard({ post, onUpdate }: PostCardProps) {
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showDeleteMenu, setShowDeleteMenu] = useState(false);
   const [poll, setPoll] = useState<any>(null);
+  const [showBoostDialog, setShowBoostDialog] = useState(false);
 
   // Get media URLs (support both legacy single image and new multi-image)
   const mediaUrls = post.media_urls && post.media_urls.length > 0 
@@ -456,15 +458,22 @@ export function PostCard({ post, onUpdate }: PostCardProps) {
       />
 
       {user?.id === post.user_id && (
-        <EditPostDialog
-          open={showEditDialog}
-          onOpenChange={setShowEditDialog}
-          post={post}
-          onSuccess={() => {
-            onUpdate?.();
-            toast({ title: 'Post updated' });
-          }}
-        />
+        <>
+          <EditPostDialog
+            open={showEditDialog}
+            onOpenChange={setShowEditDialog}
+            post={post}
+            onSuccess={() => {
+              onUpdate?.();
+              toast({ title: 'Post updated' });
+            }}
+          />
+          <BoostPostDialog
+            open={showBoostDialog}
+            onOpenChange={setShowBoostDialog}
+            postId={post.id}
+          />
+        </>
       )}
     </div>
   );

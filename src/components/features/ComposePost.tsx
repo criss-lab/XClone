@@ -242,16 +242,43 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
         return;
       }
 
-      const { data: postData, error } = await supabase.from('posts').insert({
+      // Prepare post data - fix video posting bug
+      const postPayload: any = {
         user_id: user.id,
         content: content.trim(),
-        image_url: imageUrls.length > 0 ? imageUrls[0] : (gifUrl || null), // Legacy single image field
-        media_urls: imageUrls.length > 0 ? imageUrls : [],
-        media_count: imageUrls.length,
-        video_url: videoUrl,
-        is_video: isVideo,
         community_id: communityId || null
-      }).select().single();
+      };
+
+      // Handle images
+      if (imageUrls.length > 0) {
+        postPayload.image_url = imageUrls[0]; // Legacy field
+        postPayload.media_urls = imageUrls;
+        postPayload.media_count = imageUrls.length;
+        postPayload.is_video = false;
+      }
+
+      // Handle video - critical fix
+      if (videoUrl && isVideo) {
+        postPayload.video_url = videoUrl;
+        postPayload.is_video = true;
+        postPayload.media_urls = []; // Clear media_urls for videos
+        postPayload.media_count = 0;
+      }
+
+      // Handle GIF
+      if (gifUrl && !videoUrl && imageUrls.length === 0) {
+        postPayload.image_url = gifUrl;
+        postPayload.media_urls = [gifUrl];
+        postPayload.media_count = 1;
+      }
+
+      console.log('Creating post with payload:', postPayload);
+
+      const { data: postData, error } = await supabase
+        .from('posts')
+        .insert(postPayload)
+        .select()
+        .single();
 
       if (error) throw error;
 

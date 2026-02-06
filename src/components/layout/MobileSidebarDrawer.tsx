@@ -1,5 +1,5 @@
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
-import { Menu, Home, Hash, Bell, Mail, Radio, Sparkles, Bookmark, List, History, Briefcase, BarChart3, DollarSign, ShoppingBag, Calendar, Crown, LogOut, Settings, HelpCircle, User } from 'lucide-react';
+import { Menu, Home, Hash, Bell, Mail, Radio, Sparkles, Bookmark, List, History, Briefcase, BarChart3, DollarSign, ShoppingBag, Calendar, Crown, LogOut, Settings, HelpCircle, User, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -19,6 +19,7 @@ export function MobileSidebarDrawer() {
     { icon: Mail, label: 'Messages', path: '/messages', requireAuth: true },
     { icon: Radio, label: 'Spaces', path: '/spaces', requireAuth: false },
     { icon: Sparkles, label: 'AI', path: '/ai', requireAuth: false },
+    { icon: FileText, label: 'Threads', path: '/threads', requireAuth: false },
   ];
 
   const userTools = [
