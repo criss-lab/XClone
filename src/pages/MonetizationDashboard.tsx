@@ -7,7 +7,7 @@ import { DollarSign, TrendingUp, Users, BarChart3, Eye, Loader2, ExternalLink } 
 import { toast } from 'sonner';
 import { formatNumber } from '@/lib/utils';
 
-export default function MonetizationDashboard() {
+export function MonetizationDashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [stats, setStats] = useState({
