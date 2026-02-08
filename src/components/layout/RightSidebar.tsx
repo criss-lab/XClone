@@ -5,6 +5,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { TrendingUp, Users, Hash, Radio, Sparkles, Plus } from 'lucide-react';
 import { formatNumber } from '@/lib/utils';
+import { UserSuggestionsWidget } from '../features/UserSuggestionsWidget';
+import { ContentSuggestionsWidget } from '../features/ContentSuggestionsWidget';
 
 interface TrendingTopic {
   id: string;
@@ -233,6 +235,12 @@ export function RightSidebar() {
           Show more
         </Button>
       </div>
+
+      {/* User Suggestions */}
+      <UserSuggestionsWidget />
+
+      {/* Content Suggestions */}
+      <ContentSuggestionsWidget />
 
       {/* AI Features */}
       <div className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 rounded-xl p-4 border border-purple-500/20">

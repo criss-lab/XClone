@@ -9,6 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import { CreatePollDialog } from './CreatePollDialog';
 import { SchedulePostDialog } from './SchedulePostDialog';
 import { ProductTagDialog } from './ProductTagDialog';
+import { GifPicker } from './GifPicker';
 import { toast as sonnerToast } from 'sonner';
 
 interface ComposePostProps {
@@ -27,6 +28,7 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
   const [pollData, setPollData] = useState<any>(null);
   const [gifUrl, setGifUrl] = useState<string | null>(null);
   const [showGifPicker, setShowGifPicker] = useState(false);
+  const [showGifDialog, setShowGifDialog] = useState(false);
   const [showScheduleDialog, setShowScheduleDialog] = useState(false);
   const [scheduledDate, setScheduledDate] = useState<Date | null>(null);
   const [showProductDialog, setShowProductDialog] = useState(false);
@@ -510,9 +512,10 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
                 />
               </label>
               <button
-                onClick={() => setShowGifPicker(!showGifPicker)}
+                onClick={() => setShowGifDialog(true)}
                 disabled={loading || images.length > 0 || !!video}
                 className="cursor-pointer p-2 hover:bg-primary/10 rounded-full text-primary transition-colors disabled:opacity-50 flex-shrink-0"
+                title="Add GIF"
               >
                 <Smile className="w-5 h-5" />
               </button>
@@ -561,25 +564,16 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
               </Button>
             </div>
           </div>
-          {showGifPicker && (
-            <div className="mt-2 border border-border rounded-lg p-4">
-              <p className="text-sm text-muted-foreground mb-3">Search for GIFs on Giphy.com or Tenor.com and paste the URL below:</p>
-              <input
-                type="url"
-                placeholder="Paste GIF URL"
-                className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-background"
-                onKeyPress={(e) => {
-                  if (e.key === 'Enter') {
-                    const url = (e.target as HTMLInputElement).value;
-                    if (url) {
-                      setGifUrl(url);
-                      setShowGifPicker(false);
-                      (e.target as HTMLInputElement).value = '';
-                    }
-                  }
-                }}
-              />
-            </div>
+          {showGifDialog && (
+            <GifPicker
+              onSelect={(url) => {
+                setGifUrl(url);
+                setImages([]);
+                setVideo(null);
+                setShowGifDialog(false);
+              }}
+              onClose={() => setShowGifDialog(false)}
+            />
           )}
         </div>
       </div>
