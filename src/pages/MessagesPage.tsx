@@ -1,77 +1,107 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { TopBar } from '@/components/layout/TopBar';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
-import { useNavigate } from 'react-router-dom';
-import { useToast } from '@/hooks/use-toast';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Send, Search, User, BadgeCheck, Loader2 } from 'lucide-react';
+import { formatDistanceToNow } from 'date-fns';
+import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Loader2, Send, Search } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
-import { UserProfile } from '@/types';
-
-interface Conversation {
-  id: string;
-  participant_1: string;
-  participant_2: string;
-  last_message_at: string;
-  other_user: UserProfile;
-  last_message?: {
-    content: string;
-    sender_id: string;
-    created_at: string;
-  };
-}
-
-interface Message {
-  id: string;
-  conversation_id: string;
-  sender_id: string;
-  content: string;
-  read: boolean;
-  created_at: string;
-}
 
 export default function MessagesPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { toast } = useToast();
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [searchParams] = useSearchParams();
+  const [conversations, setConversations] = useState<any[]>([]);
+  const [selectedConversation, setSelectedConversation] = useState<any>(null);
+  const [messages, setMessages] = useState<any[]>([]);
+  const [messageText, setMessageText] = useState('');
   const [loading, setLoading] = useState(true);
-  const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [activeConversation, setActiveConversation] = useState<string | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [messageContent, setMessageContent] = useState('');
   const [sending, setSending] = useState(false);
+  const [showUserSearch, setShowUserSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<UserProfile[]>([]);
+  const [searchResults, setSearchResults] = useState<any[]>([]);
 
   useEffect(() => {
     if (!user) {
       navigate('/auth');
       return;
     }
+
     fetchConversations();
-  }, [user]);
-
-  useEffect(() => {
-    if (activeConversation) {
-      fetchMessages(activeConversation);
-      markMessagesAsRead(activeConversation);
+    
+    // Check if there's a recipient parameter
+    const recipientUsername = searchParams.get('to');
+    if (recipientUsername) {
+      startConversationWithUser(recipientUsername);
     }
-  }, [activeConversation]);
+  }, [user, searchParams]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    if (selectedConversation) {
+      fetchMessages(selectedConversation.id);
+      
+      // Subscribe to new messages in real-time
+      const subscription = supabase
+        .channel(`conversation:${selectedConversation.id}`)
+        .on('postgres_changes', {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'direct_messages',
+          filter: `conversation_id=eq.${selectedConversation.id}`
+        }, (payload) => {
+          setMessages(prev => [...prev, payload.new]);
+        })
+        .subscribe();
 
-  useEffect(() => {
-    if (searchQuery.length > 0) {
-      searchUsers();
-    } else {
-      setSearchResults([]);
+      return () => {
+        subscription.unsubscribe();
+      };
     }
-  }, [searchQuery]);
+  }, [selectedConversation]);
+
+  const startConversationWithUser = async (username: string) => {
+    try {
+      const { data: recipientProfile } = await supabase
+        .from('user_profiles')
+        .select('*')
+        .eq('username', username)
+        .single();
+
+      if (!recipientProfile) {
+        toast.error('User not found');
+        return;
+      }
+
+      // Check if conversation exists
+      const { data: existing } = await supabase
+        .from('conversations')
+        .select('*')
+        .or(`and(participant_1.eq.${user!.id},participant_2.eq.${recipientProfile.id}),and(participant_1.eq.${recipientProfile.id},participant_2.eq.${user!.id})`)
+        .single();
+
+      if (existing) {
+        setSelectedConversation({ ...existing, otherUser: recipientProfile });
+      } else {
+        // Create new conversation
+        const { data: newConv, error } = await supabase
+          .from('conversations')
+          .insert({
+            participant_1: user!.id,
+            participant_2: recipientProfile.id
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+        setSelectedConversation({ ...newConv, otherUser: recipientProfile });
+      }
+    } catch (error) {
+      console.error('Error starting conversation:', error);
+      toast.error('Failed to start conversation');
+    }
+  };
 
   const fetchConversations = async () => {
     if (!user) return;
@@ -85,34 +115,30 @@ export default function MessagesPage() {
 
       if (error) throw error;
 
-      // Fetch other user profiles and last messages
-      const conversationsWithDetails = await Promise.all(
+      // Fetch other user profiles
+      const conversationsWithUsers = await Promise.all(
         (data || []).map(async (conv) => {
           const otherUserId = conv.participant_1 === user.id ? conv.participant_2 : conv.participant_1;
-          
           const { data: otherUser } = await supabase
             .from('user_profiles')
             .select('*')
             .eq('id', otherUserId)
             .single();
 
-          const { data: lastMsg } = await supabase
+          // Get last message
+          const { data: lastMessage } = await supabase
             .from('direct_messages')
             .select('*')
             .eq('conversation_id', conv.id)
             .order('created_at', { ascending: false })
             .limit(1)
-            .maybeSingle();
+            .single();
 
-          return {
-            ...conv,
-            other_user: otherUser,
-            last_message: lastMsg,
-          };
+          return { ...conv, otherUser, lastMessage };
         })
       );
 
-      setConversations(conversationsWithDetails.filter((c) => c.other_user));
+      setConversations(conversationsWithUsers);
     } catch (error) {
       console.error('Error fetching conversations:', error);
     } finally {
@@ -124,101 +150,40 @@ export default function MessagesPage() {
     try {
       const { data, error } = await supabase
         .from('direct_messages')
-        .select('*')
+        .select(`
+          *,
+          sender:user_profiles!direct_messages_sender_id_fkey(*)
+        `)
         .eq('conversation_id', conversationId)
         .order('created_at', { ascending: true });
 
       if (error) throw error;
       setMessages(data || []);
+
+      // Mark as read
+      await supabase
+        .from('direct_messages')
+        .update({ read: true })
+        .eq('conversation_id', conversationId)
+        .neq('sender_id', user!.id);
     } catch (error) {
       console.error('Error fetching messages:', error);
     }
   };
 
-  const markMessagesAsRead = async (conversationId: string) => {
-    if (!user) return;
-
-    try {
-      await supabase
-        .from('direct_messages')
-        .update({ read: true })
-        .eq('conversation_id', conversationId)
-        .neq('sender_id', user.id);
-    } catch (error) {
-      console.error('Error marking messages as read:', error);
-    }
-  };
-
-  const searchUsers = async () => {
-    try {
-      const { data } = await supabase
-        .from('user_profiles')
-        .select('*')
-        .ilike('username', `%${searchQuery}%`)
-        .limit(5);
-
-      setSearchResults(data || []);
-    } catch (error) {
-      console.error('Error searching users:', error);
-    }
-  };
-
-  const startConversation = async (otherUserId: string) => {
-    if (!user) return;
-
-    try {
-      // Check if conversation already exists
-      const { data: existing } = await supabase
-        .from('conversations')
-        .select('*')
-        .or(
-          `and(participant_1.eq.${user.id},participant_2.eq.${otherUserId}),and(participant_1.eq.${otherUserId},participant_2.eq.${user.id})`
-        )
-        .maybeSingle();
-
-      if (existing) {
-        setActiveConversation(existing.id);
-        setSearchQuery('');
-        setSearchResults([]);
-        return;
-      }
-
-      // Create new conversation
-      const { data, error } = await supabase
-        .from('conversations')
-        .insert({
-          participant_1: user.id,
-          participant_2: otherUserId,
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      setActiveConversation(data.id);
-      setSearchQuery('');
-      setSearchResults([]);
-      fetchConversations();
-    } catch (error: any) {
-      toast({
-        title: 'Error',
-        description: error.message,
-        variant: 'destructive',
-      });
-    }
-  };
-
-  const handleSendMessage = async () => {
-    if (!user || !activeConversation || !messageContent.trim()) return;
+  const sendMessage = async () => {
+    if (!messageText.trim() || !selectedConversation) return;
 
     setSending(true);
 
     try {
-      const { error } = await supabase.from('direct_messages').insert({
-        conversation_id: activeConversation,
-        sender_id: user.id,
-        content: messageContent.trim(),
-      });
+      const { error } = await supabase
+        .from('direct_messages')
+        .insert({
+          conversation_id: selectedConversation.id,
+          sender_id: user!.id,
+          content: messageText.trim()
+        });
 
       if (error) throw error;
 
@@ -226,19 +191,36 @@ export default function MessagesPage() {
       await supabase
         .from('conversations')
         .update({ last_message_at: new Date().toISOString() })
-        .eq('id', activeConversation);
+        .eq('id', selectedConversation.id);
 
-      setMessageContent('');
-      fetchMessages(activeConversation);
+      setMessageText('');
       fetchConversations();
     } catch (error: any) {
-      toast({
-        title: 'Error',
-        description: error.message,
-        variant: 'destructive',
-      });
+      console.error('Error sending message:', error);
+      toast.error(error.message || 'Failed to send message');
     } finally {
       setSending(false);
+    }
+  };
+
+  const searchUsers = async (query: string) => {
+    if (!query.trim()) {
+      setSearchResults([]);
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('user_profiles')
+        .select('*')
+        .or(`username.ilike.%${query}%,email.ilike.%${query}%`)
+        .neq('id', user!.id)
+        .limit(10);
+
+      if (error) throw error;
+      setSearchResults(data || []);
+    } catch (error) {
+      console.error('Error searching users:', error);
     }
   };
 
@@ -252,125 +234,143 @@ export default function MessagesPage() {
     );
   }
 
-  const activeConv = conversations.find((c) => c.id === activeConversation);
-
   return (
     <div className="h-screen bg-background flex flex-col">
       <TopBar title="Messages" />
 
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex flex-1 overflow-hidden">
         {/* Conversations List */}
-        <div className="w-full md:w-96 border-r border-border flex flex-col">
-          <div className="p-4 border-b border-border">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+        <div className={`${selectedConversation ? 'hidden md:block' : 'block'} w-full md:w-80 border-r border-border overflow-y-auto`}>
+          <div className="p-3 border-b border-border">
+            <Button
+              onClick={() => setShowUserSearch(!showUserSearch)}
+              className="w-full rounded-full"
+            >
+              New Message
+            </Button>
+          </div>
+
+          {showUserSearch && (
+            <div className="p-3 border-b border-border">
               <Input
                 placeholder="Search users..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  searchUsers(e.target.value);
+                }}
+                className="rounded-full"
               />
-            </div>
-            {searchResults.length > 0 && (
-              <div className="mt-2 bg-background border border-border rounded-lg overflow-hidden">
-                {searchResults.map((user) => (
-                  <button
-                    key={user.id}
-                    onClick={() => startConversation(user.id)}
-                    className="flex items-center space-x-3 p-3 hover:bg-muted w-full text-left"
-                  >
-                    <div className="w-10 h-10 rounded-full bg-muted overflow-hidden">
-                      {user.avatar_url ? (
-                        <img src={user.avatar_url} alt={user.username} className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center font-bold">
-                          {user.username[0].toUpperCase()}
-                        </div>
-                      )}
-                    </div>
-                    <div>
-                      <p className="font-semibold">{user.username}</p>
-                      <p className="text-sm text-muted-foreground">@{user.username}</p>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="flex-1 overflow-y-auto">
-            {conversations.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground px-4">
-                <p className="font-semibold mb-2">No messages yet</p>
-                <p className="text-sm">Search for a user to start a conversation</p>
-              </div>
-            ) : (
-              conversations.map((conv) => (
-                <button
-                  key={conv.id}
-                  onClick={() => setActiveConversation(conv.id)}
-                  className={`flex items-center space-x-3 p-4 border-b border-border hover:bg-muted w-full text-left ${
-                    activeConversation === conv.id ? 'bg-muted' : ''
-                  }`}
-                >
-                  <div className="w-12 h-12 rounded-full bg-muted overflow-hidden flex-shrink-0">
-                    {conv.other_user?.avatar_url ? (
-                      <img
-                        src={conv.other_user.avatar_url}
-                        alt={conv.other_user.username}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center font-bold">
-                        {conv.other_user?.username[0].toUpperCase()}
+              {searchResults.length > 0 && (
+                <div className="mt-2 bg-background border border-border rounded-lg max-h-60 overflow-y-auto">
+                  {searchResults.map((result) => (
+                    <button
+                      key={result.id}
+                      onClick={() => {
+                        startConversationWithUser(result.username);
+                        setShowUserSearch(false);
+                        setSearchQuery('');
+                        setSearchResults([]);
+                      }}
+                      className="w-full p-3 hover:bg-muted flex items-center gap-3 text-left"
+                    >
+                      <div className="w-10 h-10 rounded-full bg-muted overflow-hidden">
+                        {result.avatar_url ? (
+                          <img src={result.avatar_url} alt={result.username} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center font-bold">
+                            {result.username[0].toUpperCase()}
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold truncate">{conv.other_user?.username}</p>
-                    {conv.last_message && (
-                      <p className="text-sm text-muted-foreground truncate">
-                        {conv.last_message.sender_id === user.id && 'You: '}
-                        {conv.last_message.content}
-                      </p>
-                    )}
-                  </div>
-                  <div className="text-xs text-muted-foreground flex-shrink-0">
-                    {conv.last_message &&
-                      formatDistanceToNow(new Date(conv.last_message.created_at), { addSuffix: true })}
-                  </div>
-                </button>
-              ))
-            )}
-          </div>
-        </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1">
+                          <span className="font-semibold truncate">{result.username}</span>
+                          {result.verified && <BadgeCheck className="w-4 h-4 text-primary flex-shrink-0" />}
+                        </div>
+                        <p className="text-sm text-muted-foreground truncate">@{result.username}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
-        {/* Messages */}
-        <div className="hidden md:flex flex-1 flex-col">
-          {activeConv ? (
-            <>
-              {/* Chat Header */}
-              <div className="p-4 border-b border-border flex items-center space-x-3">
-                <div className="w-10 h-10 rounded-full bg-muted overflow-hidden">
-                  {activeConv.other_user?.avatar_url ? (
-                    <img
-                      src={activeConv.other_user.avatar_url}
-                      alt={activeConv.other_user.username}
-                      className="w-full h-full object-cover"
-                    />
+          {conversations.length === 0 ? (
+            <div className="p-8 text-center text-muted-foreground">
+              <p className="font-semibold mb-2">No messages yet</p>
+              <p className="text-sm">Start a conversation to connect with others</p>
+            </div>
+          ) : (
+            conversations.map((conv) => (
+              <button
+                key={conv.id}
+                onClick={() => setSelectedConversation(conv)}
+                className={`w-full p-4 border-b border-border hover:bg-muted/50 flex items-start gap-3 text-left transition-colors ${
+                  selectedConversation?.id === conv.id ? 'bg-muted' : ''
+                }`}
+              >
+                <div className="w-12 h-12 rounded-full bg-muted overflow-hidden flex-shrink-0">
+                  {conv.otherUser?.avatar_url ? (
+                    <img src={conv.otherUser.avatar_url} alt={conv.otherUser.username} className="w-full h-full object-cover" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center font-bold">
-                      {activeConv.other_user?.username[0].toUpperCase()}
+                      {conv.otherUser?.username?.[0]?.toUpperCase()}
                     </div>
                   )}
                 </div>
-                <div>
-                  <p className="font-semibold">{activeConv.other_user?.username}</p>
-                  <p className="text-sm text-muted-foreground">@{activeConv.other_user?.username}</p>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1 mb-1">
+                    <span className="font-semibold truncate">{conv.otherUser?.username}</span>
+                    {conv.otherUser?.verified && <BadgeCheck className="w-4 h-4 text-primary flex-shrink-0" />}
+                  </div>
+                  {conv.lastMessage && (
+                    <>
+                      <p className="text-sm text-muted-foreground truncate">
+                        {conv.lastMessage.sender_id === user.id && 'You: '}
+                        {conv.lastMessage.content}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {formatDistanceToNow(new Date(conv.lastMessage.created_at), { addSuffix: true })}
+                      </p>
+                    </>
+                  )}
+                </div>
+              </button>
+            ))
+          )}
+        </div>
+
+        {/* Messages Area */}
+        <div className="flex-1 flex flex-col">
+          {selectedConversation ? (
+            <>
+              <div className="p-4 border-b border-border flex items-center gap-3">
+                <button
+                  onClick={() => setSelectedConversation(null)}
+                  className="md:hidden p-2 hover:bg-muted rounded-full"
+                >
+                  ←
+                </button>
+                <div className="w-10 h-10 rounded-full bg-muted overflow-hidden">
+                  {selectedConversation.otherUser?.avatar_url ? (
+                    <img src={selectedConversation.otherUser.avatar_url} alt={selectedConversation.otherUser.username} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center font-bold">
+                      {selectedConversation.otherUser?.username?.[0]?.toUpperCase()}
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-1">
+                    <span className="font-bold">{selectedConversation.otherUser?.username}</span>
+                    {selectedConversation.otherUser?.verified && <BadgeCheck className="w-4 h-4 text-primary" />}
+                  </div>
+                  <p className="text-sm text-muted-foreground">@{selectedConversation.otherUser?.username}</p>
                 </div>
               </div>
 
-              {/* Messages */}
               <div className="flex-1 overflow-y-auto p-4 space-y-4">
                 {messages.map((message) => (
                   <div
@@ -378,47 +378,40 @@ export default function MessagesPage() {
                     className={`flex ${message.sender_id === user.id ? 'justify-end' : 'justify-start'}`}
                   >
                     <div
-                      className={`max-w-xs lg:max-w-md px-4 py-2 rounded-2xl ${
+                      className={`max-w-xs md:max-w-md px-4 py-2 rounded-2xl ${
                         message.sender_id === user.id
                           ? 'bg-primary text-primary-foreground'
                           : 'bg-muted'
                       }`}
                     >
-                      <p className="whitespace-pre-wrap break-words">{message.content}</p>
-                      <p
-                        className={`text-xs mt-1 ${
-                          message.sender_id === user.id
-                            ? 'text-primary-foreground/70'
-                            : 'text-muted-foreground'
-                        }`}
-                      >
+                      <p className="break-words">{message.content}</p>
+                      <p className={`text-xs mt-1 ${message.sender_id === user.id ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
                         {formatDistanceToNow(new Date(message.created_at), { addSuffix: true })}
                       </p>
                     </div>
                   </div>
                 ))}
-                <div ref={messagesEndRef} />
               </div>
 
-              {/* Message Input */}
               <div className="p-4 border-t border-border">
-                <div className="flex space-x-2">
+                <div className="flex gap-2">
                   <Input
                     placeholder="Type a message..."
-                    value={messageContent}
-                    onChange={(e) => setMessageContent(e.target.value)}
+                    value={messageText}
+                    onChange={(e) => setMessageText(e.target.value)}
                     onKeyPress={(e) => {
                       if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault();
-                        handleSendMessage();
+                        sendMessage();
                       }
                     }}
-                    maxLength={1000}
+                    className="rounded-full"
                   />
                   <Button
-                    onClick={handleSendMessage}
-                    disabled={sending || !messageContent.trim()}
-                    className="rounded-full"
+                    onClick={sendMessage}
+                    disabled={!messageText.trim() || sending}
+                    size="icon"
+                    className="rounded-full flex-shrink-0"
                   >
                     {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                   </Button>
@@ -428,8 +421,9 @@ export default function MessagesPage() {
           ) : (
             <div className="flex-1 flex items-center justify-center text-muted-foreground">
               <div className="text-center">
-                <p className="text-lg font-semibold mb-2">Select a conversation</p>
-                <p className="text-sm">Choose a conversation from the list to start messaging</p>
+                <Send className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                <p className="font-semibold text-lg mb-2">Select a conversation</p>
+                <p className="text-sm">Choose from your existing messages or start a new one</p>
               </div>
             </div>
           )}

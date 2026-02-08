@@ -1,35 +1,28 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/hooks/useAuth';
 import { TopBar } from '@/components/layout/TopBar';
 import { PostCard } from '@/components/features/PostCard';
 import { EditProfileDialog } from '@/components/features/EditProfileDialog';
-import { Button } from '@/components/ui/button';
-import { supabase } from '@/lib/supabase';
-import { UserProfile, Post } from '@/types';
-import { useAuth } from '@/hooks/useAuth';
-import { BadgeCheck, Calendar, Loader2, Settings } from 'lucide-react';
+import { Calendar, MapPin, Link as LinkIcon, Mail, BadgeCheck, Loader2, ExternalLink, Twitter, Instagram, Linkedin, MessageCircle } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
-import { useToast } from '@/hooks/use-toast';
 import { formatNumber } from '@/lib/utils';
-import { useInfiniteScroll } from '@/hooks/useInfiniteScroll';
-
-const PAGE_SIZE = 10;
-
-type ProfileTab = 'posts' | 'media' | 'likes' | 'reposts' | 'bookmarks';
+import { Post } from '@/types';
 
 export default function ProfilePage() {
   const { username } = useParams();
-  const { user } = useAuth();
+  const { user: currentUser } = useAuth();
   const navigate = useNavigate();
-  const { toast } = useToast();
-  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [profile, setProfile] = useState<any>(null);
   const [posts, setPosts] = useState<Post[]>([]);
+  const [threads, setThreads] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('Posts');
   const [isFollowing, setIsFollowing] = useState(false);
-  const [followLoading, setFollowLoading] = useState(false);
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<ProfileTab>('posts');
-  const [page, setPage] = useState(0);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+
+  const tabs = ['Posts', 'Threads', 'Replies', 'Media', 'Likes'];
 
   useEffect(() => {
     if (username) {
@@ -38,228 +31,117 @@ export default function ProfilePage() {
   }, [username]);
 
   useEffect(() => {
-    if (profile) {
-      setPage(0);
-      loadTabContent(0);
+    if (profile && currentUser && profile.id !== currentUser.id) {
+      checkFollowStatus();
     }
-  }, [activeTab, profile]);
+  }, [profile, currentUser]);
 
   const fetchProfile = async () => {
     try {
-      // Clean the username - remove @ if present
-      const cleanUsername = username?.replace('@', '').toLowerCase();
-      
       const { data: profileData, error: profileError } = await supabase
         .from('user_profiles')
         .select('*')
-        .ilike('username', cleanUsername)
-        .maybeSingle();
+        .eq('username', username)
+        .single();
 
       if (profileError) throw profileError;
-      
-      if (!profileData) {
-        setProfile(null);
-        setLoading(false);
-        return;
-      }
-      
       setProfile(profileData);
 
-      if (user && user.id !== profileData.id) {
-        const { data: followData } = await supabase
-          .from('follows')
-          .select('id')
-          .eq('follower_id', user.id)
-          .eq('following_id', profileData.id)
-          .single();
-
-        setIsFollowing(!!followData);
-      }
+      await Promise.all([
+        fetchPosts(profileData.id),
+        fetchThreads(profileData.id)
+      ]);
     } catch (error) {
       console.error('Error fetching profile:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to load profile',
-        variant: 'destructive',
-      });
+      navigate('/');
     } finally {
       setLoading(false);
     }
   };
 
-  const loadTabContent = async (pageNum: number) => {
-    if (!profile) return;
+  const fetchPosts = async (userId: string) => {
+    const { data, error } = await supabase
+      .from('posts')
+      .select(`
+        *,
+        user_profiles (*)
+      `)
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
 
-    try {
-      let data: Post[] = [];
-
-      switch (activeTab) {
-        case 'posts':
-          data = await fetchPosts(pageNum, profile.id);
-          break;
-        case 'media':
-          data = await fetchMedia(pageNum, profile.id);
-          break;
-        case 'likes':
-          data = await fetchLikes(pageNum, profile.id);
-          break;
-        case 'reposts':
-          data = await fetchReposts(pageNum, profile.id);
-          break;
-        case 'bookmarks':
-          data = await fetchBookmarks(pageNum, profile.id);
-          break;
-      }
-
-      if (pageNum === 0) {
-        setPosts(data);
-      } else {
-        setPosts((prev) => [...prev, ...data]);
-      }
-      setPage(pageNum);
-    } catch (error) {
-      console.error('Error loading tab content:', error);
+    if (error) {
+      console.error('Error fetching posts:', error);
+      return;
     }
+    setPosts(data || []);
   };
 
-  const fetchPosts = async (pageNum: number, userId: string): Promise<Post[]> => {
+  const fetchThreads = async (userId: string) => {
     const { data, error } = await supabase
-      .from('posts')
-      .select(`
-        *,
-        user_profiles (*)
-      `)
+      .from('threads')
+      .select('*')
       .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-      .range(pageNum * PAGE_SIZE, (pageNum + 1) * PAGE_SIZE - 1);
+      .eq('is_published', true)
+      .order('created_at', { ascending: false });
 
-    if (error) throw error;
-    return data || [];
+    if (error) {
+      console.error('Error fetching threads:', error);
+      return;
+    }
+    setThreads(data || []);
   };
 
-  const fetchMedia = async (pageNum: number, userId: string): Promise<Post[]> => {
-    const { data, error } = await supabase
-      .from('posts')
-      .select(`
-        *,
-        user_profiles (*)
-      `)
-      .eq('user_id', userId)
-      .not('image_url', 'is', null)
-      .order('created_at', { ascending: false })
-      .range(pageNum * PAGE_SIZE, (pageNum + 1) * PAGE_SIZE - 1);
+  const checkFollowStatus = async () => {
+    if (!currentUser || !profile) return;
 
-    if (error) throw error;
-    return data || [];
+    const { data } = await supabase
+      .from('follows')
+      .select('id')
+      .eq('follower_id', currentUser.id)
+      .eq('following_id', profile.id)
+      .single();
+
+    setIsFollowing(!!data);
   };
-
-  const fetchLikes = async (pageNum: number, userId: string): Promise<Post[]> => {
-    const { data, error } = await supabase
-      .from('likes')
-      .select(`
-        post_id,
-        posts (
-          *,
-          user_profiles (*)
-        )
-      `)
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-      .range(pageNum * PAGE_SIZE, (pageNum + 1) * PAGE_SIZE - 1);
-
-    if (error) throw error;
-    return (data || []).map((like: any) => like.posts).filter(Boolean);
-  };
-
-  const fetchReposts = async (pageNum: number, userId: string): Promise<Post[]> => {
-    const { data, error} = await supabase
-      .from('reposts')
-      .select(`
-        post_id,
-        posts (
-          *,
-          user_profiles (*)
-        )
-      `)
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-      .range(pageNum * PAGE_SIZE, (pageNum + 1) * PAGE_SIZE - 1);
-
-    if (error) throw error;
-    return (data || []).map((repost: any) => repost.posts).filter(Boolean);
-  };
-
-  const fetchBookmarks = async (pageNum: number, userId: string): Promise<Post[]> => {
-    const { data, error } = await supabase
-      .from('bookmarks')
-      .select(`
-        post_id,
-        posts (
-          *,
-          user_profiles (*)
-        )
-      `)
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-      .range(pageNum * PAGE_SIZE, (pageNum + 1) * PAGE_SIZE - 1);
-
-    if (error) throw error;
-    return (data || []).map((bookmark: any) => bookmark.posts).filter(Boolean);
-  };
-
-  const loadMore = async (): Promise<boolean> => {
-    if (!profile) return false;
-    
-    const nextPage = page + 1;
-    await loadTabContent(nextPage);
-    return posts.length % PAGE_SIZE === 0;
-  };
-
-  const { lastElementRef, loading: loadingMore } = useInfiniteScroll(loadMore);
 
   const handleFollow = async () => {
-    if (!user) {
+    if (!currentUser) {
       navigate('/auth');
       return;
     }
-
-    setFollowLoading(true);
 
     try {
       if (isFollowing) {
         await supabase
           .from('follows')
           .delete()
-          .eq('follower_id', user.id)
-          .eq('following_id', profile!.id);
-
-        setIsFollowing(false);
+          .eq('follower_id', currentUser.id)
+          .eq('following_id', profile.id);
       } else {
         await supabase.from('follows').insert({
-          follower_id: user.id,
-          following_id: profile!.id,
+          follower_id: currentUser.id,
+          following_id: profile.id,
         });
 
         await supabase.from('notifications').insert({
-          user_id: profile!.id,
+          user_id: profile.id,
           type: 'follow',
-          from_user_id: user.id,
+          from_user_id: currentUser.id,
         });
-
-        setIsFollowing(true);
       }
-      
+      setIsFollowing(!isFollowing);
       fetchProfile();
-    } catch (error) {
-      console.error('Error toggling follow:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to update follow status',
-        variant: 'destructive',
-      });
-    } finally {
-      setFollowLoading(false);
+    } catch (error: any) {
+      console.error('Follow error:', error);
     }
+  };
+
+  const handleMessage = () => {
+    if (!currentUser) {
+      navigate('/auth');
+      return;
+    }
+    navigate(`/messages?to=${profile.username}`);
   };
 
   if (loading) {
@@ -270,25 +152,26 @@ export default function ProfilePage() {
     );
   }
 
-  if (!profile) {
-    return (
-      <div className="min-h-screen bg-background">
-        <TopBar title="Profile" showBack />
-        <div className="text-center py-12 text-muted-foreground">
-          <p>Profile not found</p>
-        </div>
-      </div>
-    );
-  }
+  if (!profile) return null;
 
-  const isOwnProfile = user?.id === profile.id;
+  const isOwnProfile = currentUser?.id === profile.id;
 
   return (
     <div className="min-h-screen bg-background pb-16 md:pb-0">
       <TopBar title={profile.username} showBack />
 
+      {/* Profile Header */}
       <div className="border-b border-border">
-        <div className="h-48 bg-gradient-to-br from-primary/30 via-primary/20 to-primary/10" />
+        {profile.cover_image && (
+          <div className="h-48 bg-muted overflow-hidden">
+            <img
+              src={profile.cover_image}
+              alt="Cover"
+              className="w-full h-full object-cover"
+            />
+          </div>
+        )}
+
         <div className="px-4 pb-4">
           <div className="flex justify-between items-start -mt-16 mb-4">
             <div className="w-32 h-32 rounded-full border-4 border-background bg-muted overflow-hidden">
@@ -304,167 +187,199 @@ export default function ProfilePage() {
                 </div>
               )}
             </div>
-            {isOwnProfile ? (
-              <Button
-                onClick={() => setEditDialogOpen(true)}
-                variant="outline"
-                className="mt-3 rounded-full px-6"
-              >
-                <Settings className="w-4 h-4 mr-2" />
-                Edit profile
-              </Button>
-            ) : (
-              <Button
-                onClick={handleFollow}
-                variant={isFollowing ? 'outline' : 'default'}
-                className="mt-3 rounded-full px-6"
-                disabled={followLoading}
-              >
-                {followLoading ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : isFollowing ? (
-                  'Following'
-                ) : (
-                  'Follow'
-                )}
-              </Button>
-            )}
+
+            <div className="flex gap-2 mt-2">
+              {isOwnProfile ? (
+                <button
+                  onClick={() => setShowEditDialog(true)}
+                  className="px-4 py-2 border border-border rounded-full font-semibold hover:bg-muted transition-colors"
+                >
+                  Edit profile
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={handleMessage}
+                    className="px-4 py-2 border border-border rounded-full font-semibold hover:bg-muted transition-colors flex items-center gap-2"
+                  >
+                    <MessageCircle className="w-4 h-4" />
+                    Message
+                  </button>
+                  <button
+                    onClick={handleFollow}
+                    className={`px-4 py-2 rounded-full font-semibold transition-colors ${
+                      isFollowing
+                        ? 'border border-border hover:bg-muted'
+                        : 'bg-foreground text-background hover:opacity-90'
+                    }`}
+                  >
+                    {isFollowing ? 'Following' : 'Follow'}
+                  </button>
+                </>
+              )}
+            </div>
           </div>
 
-          <div className="space-y-3">
-            <div className="flex items-center space-x-2">
-              <h1 className="text-xl font-bold">{profile.username}</h1>
+          <div className="mb-3">
+            <div className="flex items-center gap-2 mb-1">
+              <h2 className="text-xl font-bold">{profile.username}</h2>
               {profile.verified && (
                 <BadgeCheck className="w-5 h-5 text-primary" fill="currentColor" />
               )}
             </div>
-
             <p className="text-muted-foreground">@{profile.username}</p>
+          </div>
 
-            {profile.bio && <p className="text-foreground">{profile.bio}</p>}
+          {profile.bio && <p className="mb-3 break-words">{profile.bio}</p>}
 
-            <div className="flex items-center space-x-2 text-muted-foreground">
-              <Calendar className="w-4 h-4" />
-              <span className="text-sm">
-                Joined {formatDistanceToNow(new Date(profile.created_at), { addSuffix: true })}
-              </span>
-            </div>
-
+          <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm text-muted-foreground mb-3">
+            {profile.location && (
+              <div className="flex items-center gap-1">
+                <MapPin className="w-4 h-4" />
+                <span>{profile.location}</span>
+              </div>
+            )}
             {profile.website && (
-              <a 
-                href={profile.website} 
-                target="_blank" 
+              <a
+                href={profile.website.startsWith('http') ? profile.website : `https://${profile.website}`}
+                target="_blank"
                 rel="noopener noreferrer"
-                className="text-primary hover:underline text-sm"
+                className="flex items-center gap-1 text-primary hover:underline"
               >
-                {profile.website}
+                <LinkIcon className="w-4 h-4" />
+                <span>{profile.website.replace(/^https?:\/\//, '')}</span>
               </a>
             )}
-
-            {profile.location && (
-              <p className="text-sm text-muted-foreground">{profile.location}</p>
-            )}
-
-            <div className="flex space-x-4">
-              <div>
-                <span className="font-bold text-foreground">{formatNumber(profile.following_count)}</span>{' '}
-                <span className="text-muted-foreground">Following</span>
-              </div>
-              <div>
-                <span className="font-bold text-foreground">{formatNumber(profile.followers_count)}</span>{' '}
-                <span className="text-muted-foreground">Followers</span>
-              </div>
+            <div className="flex items-center gap-1">
+              <Calendar className="w-4 h-4" />
+              <span>Joined {formatDistanceToNow(new Date(profile.created_at), { addSuffix: true })}</span>
             </div>
           </div>
+
+          {/* Social Links */}
+          {(profile.twitter_handle || profile.instagram_handle || profile.linkedin_url) && (
+            <div className="flex gap-3 mb-3">
+              {profile.twitter_handle && (
+                <a
+                  href={`https://twitter.com/${profile.twitter_handle}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-muted-foreground hover:text-primary transition-colors"
+                  title="Twitter/X"
+                >
+                  <Twitter className="w-5 h-5" />
+                </a>
+              )}
+              {profile.instagram_handle && (
+                <a
+                  href={`https://instagram.com/${profile.instagram_handle}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-muted-foreground hover:text-primary transition-colors"
+                  title="Instagram"
+                >
+                  <Instagram className="w-5 h-5" />
+                </a>
+              )}
+              {profile.linkedin_url && (
+                <a
+                  href={profile.linkedin_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-muted-foreground hover:text-primary transition-colors"
+                  title="LinkedIn"
+                >
+                  <Linkedin className="w-5 h-5" />
+                </a>
+              )}
+            </div>
+          )}
+
+          <div className="flex gap-4">
+            <button className="hover:underline">
+              <span className="font-bold">{formatNumber(profile.following_count)}</span>{' '}
+              <span className="text-muted-foreground">Following</span>
+            </button>
+            <button className="hover:underline">
+              <span className="font-bold">{formatNumber(profile.followers_count)}</span>{' '}
+              <span className="text-muted-foreground">Followers</span>
+            </button>
+          </div>
         </div>
       </div>
 
-      <div className="border-b border-border sticky top-14 z-30 bg-background">
-        <div className="flex">
-          <button
-            onClick={() => setActiveTab('posts')}
-            className={`flex-1 py-4 font-semibold transition-colors border-b-2 ${
-              activeTab === 'posts'
-                ? 'border-primary text-foreground'
-                : 'border-transparent text-muted-foreground hover:bg-muted/5'
-            }`}
-          >
-            Posts
-          </button>
-          <button
-            onClick={() => setActiveTab('reposts')}
-            className={`flex-1 py-4 font-semibold transition-colors border-b-2 ${
-              activeTab === 'reposts'
-                ? 'border-primary text-foreground'
-                : 'border-transparent text-muted-foreground hover:bg-muted/5'
-            }`}
-          >
-            Reposts
-          </button>
-          <button
-            onClick={() => setActiveTab('media')}
-            className={`flex-1 py-4 font-semibold transition-colors border-b-2 ${
-              activeTab === 'media'
-                ? 'border-primary text-foreground'
-                : 'border-transparent text-muted-foreground hover:bg-muted/5'
-            }`}
-          >
-            Media
-          </button>
-          <button
-            onClick={() => setActiveTab('likes')}
-            className={`flex-1 py-4 font-semibold transition-colors border-b-2 ${
-              activeTab === 'likes'
-                ? 'border-primary text-foreground'
-                : 'border-transparent text-muted-foreground hover:bg-muted/5'
-            }`}
-          >
-            Likes
-          </button>
-          {isOwnProfile && (
+      {/* Tabs */}
+      <div className="sticky top-14 z-30 bg-background border-b border-border">
+        <div className="flex overflow-x-auto scrollbar-hide">
+          {tabs.map((tab) => (
             <button
-              onClick={() => setActiveTab('bookmarks')}
-              className={`flex-1 py-4 font-semibold transition-colors border-b-2 ${
-                activeTab === 'bookmarks'
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`flex-shrink-0 px-4 py-4 font-semibold transition-colors border-b-2 ${
+                activeTab === tab
                   ? 'border-primary text-foreground'
-                  : 'border-transparent text-muted-foreground hover:bg-muted/5'
+                  : 'border-transparent text-muted-foreground hover:bg-muted/50'
               }`}
             >
-              Bookmarks
+              {tab}
             </button>
-          )}
+          ))}
         </div>
       </div>
 
+      {/* Content */}
       <div>
-        {posts.length === 0 ? (
-          <div className="text-center py-12 text-muted-foreground">
-            <p>No {activeTab} yet</p>
-          </div>
-        ) : (
-          <>
-            {posts.map((post, index) => (
+        {activeTab === 'Posts' && (
+          posts.length > 0 ? (
+            posts.map((post) => (
+              <PostCard key={post.id} post={post} onUpdate={fetchProfile} />
+            ))
+          ) : (
+            <div className="text-center py-12 text-muted-foreground">
+              <p>No posts yet</p>
+            </div>
+          )
+        )}
+
+        {activeTab === 'Threads' && (
+          threads.length > 0 ? (
+            threads.map((thread) => (
               <div
-                key={post.id}
-                ref={index === posts.length - 1 ? lastElementRef : null}
+                key={thread.id}
+                onClick={() => navigate(`/thread/${thread.id}`)}
+                className="border-b border-border p-4 hover:bg-muted/5 cursor-pointer"
               >
-                <PostCard post={post} onUpdate={() => loadTabContent(0)} />
+                <h3 className="font-bold text-lg mb-2">{thread.title}</h3>
+                <p className="text-muted-foreground line-clamp-3 mb-2">{thread.content.substring(0, 200)}...</p>
+                <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                  <span>{formatNumber(thread.views_count)} views</span>
+                  <span>{formatNumber(thread.likes_count)} likes</span>
+                  <span>{formatDistanceToNow(new Date(thread.created_at), { addSuffix: true })}</span>
+                </div>
               </div>
-            ))}
-            {loadingMore && (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="w-6 h-6 animate-spin text-primary" />
-              </div>
-            )}
-          </>
+            ))
+          ) : (
+            <div className="text-center py-12 text-muted-foreground">
+              <p>No threads yet</p>
+            </div>
+          )
+        )}
+
+        {activeTab !== 'Posts' && activeTab !== 'Threads' && (
+          <div className="text-center py-12 text-muted-foreground">
+            <p>Coming soon</p>
+          </div>
         )}
       </div>
 
-      <EditProfileDialog
-        open={editDialogOpen}
-        onOpenChange={setEditDialogOpen}
-        onSuccess={fetchProfile}
-      />
+      {isOwnProfile && (
+        <EditProfileDialog
+          open={showEditDialog}
+          onOpenChange={setShowEditDialog}
+          profile={profile}
+          onSuccess={fetchProfile}
+        />
+      )}
     </div>
   );
 }
