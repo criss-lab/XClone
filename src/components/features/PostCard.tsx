@@ -365,8 +365,25 @@ export function PostCard({ post, onUpdate }: PostCardProps) {
             }}
           />
 
+          {/* Video Player */}
+          {post.is_video && post.video_url && (
+            <div className="mt-3 rounded-2xl overflow-hidden bg-black max-h-[600px]">
+              <video
+                controls
+                className="w-full h-full max-h-[600px] object-contain"
+                playsInline
+                preload="metadata"
+              >
+                <source src={post.video_url} type="video/mp4" />
+                <source src={post.video_url} type="video/webm" />
+                <source src={post.video_url} type="video/ogg" />
+                Your browser does not support the video tag.
+              </video>
+            </div>
+          )}
+
           {/* Multi-Image Grid */}
-          {mediaUrls.length > 0 && (
+          {!post.is_video && mediaUrls.length > 0 && (
             <div className={`mt-3 gap-2 rounded-2xl overflow-hidden ${
               mediaUrls.length === 1 ? 'grid grid-cols-1' :
               mediaUrls.length === 2 ? 'grid grid-cols-2' :
