@@ -87,6 +87,8 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
     if (e.target.files?.[0]) {
       const file = e.target.files[0];
       
+      console.log('Video file selected:', file.name, 'Size:', file.size, 'Type:', file.type);
+      
       // Check file type
       if (!file.type.startsWith('video/')) {
         sonnerToast.error('Please select a valid video file');
@@ -114,6 +116,7 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
           return;
         }
         
+        console.log('Video validated successfully, duration:', videoElement.duration);
         setVideo(file);
         setImages([]);
         setGifUrl(null);
@@ -152,10 +155,10 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
     try {
       let imageUrls: string[] = [];
       let videoUrl = null;
-      let isVideo = false;
 
       // Upload multiple images
       if (images.length > 0) {
+        console.log(`Uploading ${images.length} image(s)...`);
         sonnerToast.loading(`Uploading ${images.length} image(s)...`);
         
         for (let i = 0; i < images.length; i++) {
@@ -189,11 +192,15 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
         }
       }
 
+      // Upload video - CRITICAL FIX
       if (video) {
+        console.log('Starting video upload...', video.name);
         sonnerToast.loading('Uploading video...');
         
         const fileExt = video.name.split('.').pop();
         const fileName = `videos/${user.id}/${Date.now()}.${fileExt}`;
+        
+        console.log('Uploading to:', fileName);
         
         const { data: uploadData, error: uploadError } = await supabase.storage
           .from('posts')
@@ -204,16 +211,20 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
 
         if (uploadError) {
           console.error('Video upload error:', uploadError);
+          sonnerToast.dismiss();
           sonnerToast.error(`Upload failed: ${uploadError.message}`);
-          throw uploadError;
+          setLoading(false);
+          return;
         }
+
+        console.log('Video uploaded successfully:', uploadData);
 
         const { data: { publicUrl } } = supabase.storage
           .from('posts')
           .getPublicUrl(fileName);
 
         videoUrl = publicUrl;
-        isVideo = true;
+        console.log('Video public URL:', videoUrl);
         sonnerToast.dismiss();
         sonnerToast.success('Video uploaded successfully!');
       }
@@ -244,45 +255,56 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
         return;
       }
 
-      // Prepare post data - fix video posting bug
+      // Prepare post data - CRITICAL FIX FOR VIDEO
       const postPayload: any = {
         user_id: user.id,
-        content: content.trim(),
-        community_id: communityId || null
+        content: content.trim() || '',
+        community_id: communityId || null,
+        media_urls: [],
+        media_count: 0,
+        is_video: false,
       };
 
+      // Handle video - THIS IS THE CRITICAL FIX
+      if (videoUrl && video) {
+        console.log('Setting video in post payload:', videoUrl);
+        postPayload.video_url = videoUrl;
+        postPayload.is_video = true;
+        postPayload.image_url = null;
+        postPayload.media_urls = [];
+        postPayload.media_count = 0;
+      } 
       // Handle images
-      if (imageUrls.length > 0) {
-        postPayload.image_url = imageUrls[0]; // Legacy field
+      else if (imageUrls.length > 0) {
+        postPayload.image_url = imageUrls[0];
         postPayload.media_urls = imageUrls;
         postPayload.media_count = imageUrls.length;
         postPayload.is_video = false;
-      }
-
-      // Handle video - critical fix
-      if (videoUrl && isVideo) {
-        postPayload.video_url = videoUrl;
-        postPayload.is_video = true;
-        postPayload.media_urls = []; // Clear media_urls for videos
-        postPayload.media_count = 0;
-      }
-
+        postPayload.video_url = null;
+      } 
       // Handle GIF
-      if (gifUrl && !videoUrl && imageUrls.length === 0) {
+      else if (gifUrl) {
         postPayload.image_url = gifUrl;
         postPayload.media_urls = [gifUrl];
         postPayload.media_count = 1;
+        postPayload.is_video = false;
+        postPayload.video_url = null;
       }
 
-      console.log('Creating post with payload:', postPayload);
+      console.log('Creating post with payload:', JSON.stringify(postPayload, null, 2));
 
-      const { data: postData, error } = await supabase
+      const { data: postData, error: postError } = await supabase
         .from('posts')
         .insert(postPayload)
         .select()
         .single();
 
-      if (error) throw error;
+      if (postError) {
+        console.error('Post creation error:', postError);
+        throw postError;
+      }
+
+      console.log('Post created successfully:', postData);
 
       // Create poll if attached
       if (pollData && postData) {
@@ -334,10 +356,12 @@ export function ComposePost({ onSuccess, communityId }: ComposePostProps) {
       setGifUrl(null);
       setScheduledDate(null);
       setTaggedProducts([]);
+      sonnerToast.success('Post created successfully!');
       toast({ title: 'Success', description: 'Post created successfully' });
       onSuccess?.();
     } catch (error: any) {
       console.error('Post error:', error);
+      sonnerToast.error(error.message || 'Failed to create post');
       toast({
         title: 'Error',
         description: error.message || 'Failed to create post',

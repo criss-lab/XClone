@@ -12,15 +12,24 @@ import {
   Users,
   BarChart3,
   Loader2,
+  ExternalLink,
 } from 'lucide-react';
 import { formatNumber } from '@/lib/utils';
-import { Post } from '@/types';
+import { formatDistanceToNow } from 'date-fns';
 
-interface PostAnalytics {
-  post: Post;
-  views: number;
-  unique_viewers: number;
-  engagement_rate: number;
+interface PostWithAnalytics {
+  id: string;
+  content: string;
+  likes_count: number;
+  reposts_count: number;
+  replies_count: number;
+  views_count: number;
+  created_at: string;
+  analytics: {
+    views: number;
+    unique_viewers: number;
+    engagement_rate: number;
+  };
 }
 
 export default function AnalyticsDashboard() {
@@ -36,7 +45,7 @@ export default function AnalyticsDashboard() {
     followers: 0,
     following: 0,
   });
-  const [topPosts, setTopPosts] = useState<PostAnalytics[]>([]);
+  const [topPosts, setTopPosts] = useState<PostWithAnalytics[]>([]);
 
   useEffect(() => {
     if (!user) {
@@ -53,7 +62,7 @@ export default function AnalyticsDashboard() {
       // Get overview stats
       const { data: posts } = await supabase
         .from('posts')
-        .select('*, user_profiles(*)')
+        .select('*')
         .eq('user_id', user.id);
 
       const total_posts = posts?.length || 0;
@@ -78,29 +87,39 @@ export default function AnalyticsDashboard() {
         following: profile?.following_count || 0,
       });
 
-      // Get top performing posts
-      const { data: analyticsData } = await supabase
-        .from('post_analytics')
+      // Get posts with their analytics
+      const { data: postsWithAnalytics, error } = await supabase
+        .from('posts')
         .select(`
           *,
-          posts (
-            *,
-            user_profiles (*)
-          )
+          analytics:post_analytics(views, unique_viewers, engagement_rate)
         `)
-        .order('engagement_rate', { ascending: false })
+        .eq('user_id', user.id)
+        .order('views_count', { ascending: false })
         .limit(10);
 
-      const topPostsData: PostAnalytics[] = (analyticsData || [])
-        .filter((a: any) => a.posts?.user_id === user.id)
-        .map((a: any) => ({
-          post: a.posts,
-          views: a.views || 0,
-          unique_viewers: a.unique_viewers || 0,
-          engagement_rate: a.engagement_rate || 0,
-        }));
+      if (error) throw error;
 
-      setTopPosts(topPostsData);
+      const formattedPosts: PostWithAnalytics[] = (postsWithAnalytics || []).map((post: any) => ({
+        id: post.id,
+        content: post.content,
+        likes_count: post.likes_count || 0,
+        reposts_count: post.reposts_count || 0,
+        replies_count: post.replies_count || 0,
+        views_count: post.views_count || 0,
+        created_at: post.created_at,
+        analytics: {
+          views: post.analytics?.views || post.views_count || 0,
+          unique_viewers: post.analytics?.unique_viewers || Math.max(1, Math.floor((post.views_count || 0) / 2)),
+          engagement_rate: post.analytics?.engagement_rate || (
+            post.views_count > 0 
+              ? ((post.likes_count + post.reposts_count + post.replies_count) / post.views_count * 100)
+              : 0
+          ),
+        },
+      }));
+
+      setTopPosts(formattedPosts);
     } catch (error) {
       console.error('Error fetching analytics:', error);
     } finally {
@@ -196,38 +215,59 @@ export default function AnalyticsDashboard() {
 
         {/* Top Performing Posts */}
         <div>
-          <h2 className="text-xl font-bold mb-4">Top Performing Posts</h2>
+          <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+            <TrendingUp className="w-6 h-6 text-primary" />
+            Top Performing Posts
+          </h2>
           <div className="space-y-3">
             {topPosts.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
-                <p>No analytics data available yet</p>
+                <BarChart3 className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                <p className="font-medium">No analytics data available yet</p>
                 <p className="text-sm mt-1">Start posting to see your analytics</p>
               </div>
             ) : (
-              topPosts.map(({ post, views, engagement_rate }) => (
+              topPosts.map((post) => (
                 <div
                   key={post.id}
-                  className="bg-muted/30 p-4 rounded-xl hover:bg-muted/50 transition-colors cursor-pointer"
+                  onClick={() => navigate(`/post/${post.id}`)}
+                  className="bg-gradient-to-br from-muted/30 to-muted/10 border border-border p-4 rounded-xl hover:bg-muted/50 transition-all cursor-pointer hover:shadow-md"
                 >
-                  <p className="line-clamp-2 mb-3">{post.content}</p>
-                  <div className="flex justify-between items-center text-sm">
-                    <div className="flex space-x-4">
-                      <div className="flex items-center space-x-1">
-                        <Eye className="w-4 h-4 text-muted-foreground" />
-                        <span>{formatNumber(views)}</span>
+                  <p className="line-clamp-2 mb-4 text-base">{post.content}</p>
+                  
+                  <div className="flex justify-between items-center">
+                    <div className="flex space-x-4 text-sm">
+                      <div className="flex items-center space-x-1.5 text-muted-foreground">
+                        <Eye className="w-4 h-4" />
+                        <span className="font-medium">{formatNumber(post.analytics.views)}</span>
                       </div>
-                      <div className="flex items-center space-x-1">
-                        <Heart className="w-4 h-4 text-pink-600" />
-                        <span>{formatNumber(post.likes_count)}</span>
+                      <div className="flex items-center space-x-1.5 text-pink-600">
+                        <Heart className="w-4 h-4" />
+                        <span className="font-medium">{formatNumber(post.likes_count)}</span>
                       </div>
-                      <div className="flex items-center space-x-1">
-                        <Repeat2 className="w-4 h-4 text-green-600" />
-                        <span>{formatNumber(post.reposts_count)}</span>
+                      <div className="flex items-center space-x-1.5 text-green-600">
+                        <Repeat2 className="w-4 h-4" />
+                        <span className="font-medium">{formatNumber(post.reposts_count)}</span>
+                      </div>
+                      <div className="flex items-center space-x-1.5 text-primary">
+                        <MessageCircle className="w-4 h-4" />
+                        <span className="font-medium">{formatNumber(post.replies_count)}</span>
                       </div>
                     </div>
-                    <div className="text-primary font-semibold">
-                      {engagement_rate.toFixed(1)}% engagement
+                    
+                    <div className="flex items-center gap-3">
+                      <div className="px-3 py-1 bg-primary/10 border border-primary/20 rounded-full">
+                        <span className="text-sm font-bold text-primary">
+                          {post.analytics.engagement_rate.toFixed(1)}% engagement
+                        </span>
+                      </div>
+                      <ExternalLink className="w-4 h-4 text-muted-foreground" />
                     </div>
+                  </div>
+
+                  <div className="mt-3 pt-3 border-t border-border text-xs text-muted-foreground">
+                    Posted {formatDistanceToNow(new Date(post.created_at), { addSuffix: true })} · 
+                    {' '}{formatNumber(post.analytics.unique_viewers)} unique viewers
                   </div>
                 </div>
               ))
