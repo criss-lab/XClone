@@ -1,7 +1,7 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
-import { Home, Search, Bell, Mail, User, Hash, Radio, LogOut, Plus, Users, TrendingUp, Sparkles, Bookmark, List, DollarSign, BarChart3, ShoppingBag, Calendar, Crown, Briefcase, Settings, HelpCircle, History, ChevronDown, ChevronUp, FileText } from 'lucide-react';
+import { Home, Search, Bell, Mail, User, Hash, Radio, LogOut, Plus, Users, TrendingUp, Sparkles, Bookmark, List, DollarSign, BarChart3, ShoppingBag, Calendar, Crown, Briefcase, Settings, HelpCircle, History, ChevronDown, ChevronUp, FileText, Wallet, Megaphone } from 'lucide-react';
 import { authService } from '@/lib/auth';
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
@@ -82,6 +82,8 @@ export function Sidebar() {
     { icon: Bookmark, label: 'Bookmarks', path: '/bookmarks', requireAuth: true },
     { icon: List, label: 'Lists', path: '/lists', requireAuth: true },
     { icon: History, label: 'History', path: '/history', requireAuth: true },
+    { icon: Wallet, label: 'My Wallet', path: '/wallet', requireAuth: true },
+    { icon: Megaphone, label: 'My Ads', path: '/my-ads', requireAuth: true },
   ];
 
   const handleNavClick = (path: string, requireAuth?: boolean) => {

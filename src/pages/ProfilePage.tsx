@@ -17,12 +17,17 @@ export default function ProfilePage() {
   const [profile, setProfile] = useState<any>(null);
   const [posts, setPosts] = useState<Post[]>([]);
   const [threads, setThreads] = useState<any[]>([]);
+  const [replies, setReplies] = useState<any[]>([]);
+  const [media, setMedia] = useState<any[]>([]);
+  const [likedPosts, setLikedPosts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('Posts');
   const [isFollowing, setIsFollowing] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
+  const [followers, setFollowers] = useState<any[]>([]);
+  const [following, setFollowing] = useState<any[]>([]);
 
-  const tabs = ['Posts', 'Threads', 'Replies', 'Media', 'Likes'];
+  const tabs = ['Posts', 'Threads', 'Replies', 'Media', 'Likes', 'Followers', 'Following'];
 
   useEffect(() => {
     if (username) {
@@ -49,7 +54,12 @@ export default function ProfilePage() {
 
       await Promise.all([
         fetchPosts(profileData.id),
-        fetchThreads(profileData.id)
+        fetchThreads(profileData.id),
+        fetchReplies(profileData.id),
+        fetchMedia(profileData.id),
+        fetchLikedPosts(profileData.id),
+        fetchFollowers(profileData.id),
+        fetchFollowing(profileData.id)
       ]);
     } catch (error) {
       console.error('Error fetching profile:', error);
@@ -89,6 +99,94 @@ export default function ProfilePage() {
       return;
     }
     setThreads(data || []);
+  };
+
+  const fetchReplies = async (userId: string) => {
+    const { data, error } = await supabase
+      .from('replies')
+      .select(`
+        *,
+        posts(
+          *,
+          user_profiles(*)
+        )
+      `)
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching replies:', error);
+      return;
+    }
+    setReplies(data || []);
+  };
+
+  const fetchMedia = async (userId: string) => {
+    const { data, error } = await supabase
+      .from('posts')
+      .select(`
+        *,
+        user_profiles (*)
+      `)
+      .eq('user_id', userId)
+      .or('image_url.not.is.null,video_url.not.is.null,media_urls.neq.[]')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching media:', error);
+      return;
+    }
+    setMedia(data || []);
+  };
+
+  const fetchLikedPosts = async (userId: string) => {
+    const { data, error } = await supabase
+      .from('likes')
+      .select(`
+        posts(
+          *,
+          user_profiles(*)
+        )
+      `)
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching liked posts:', error);
+      return;
+    }
+    const posts = (data || []).map((item: any) => item.posts).filter(Boolean);
+    setLikedPosts(posts);
+  };
+
+  const fetchFollowers = async (userId: string) => {
+    const { data, error } = await supabase
+      .from('follows')
+      .select(`
+        follower:user_profiles!follows_follower_id_fkey(*)
+      `)
+      .eq('following_id', userId);
+
+    if (error) {
+      console.error('Error fetching followers:', error);
+      return;
+    }
+    setFollowers((data || []).map((item: any) => item.follower).filter(Boolean));
+  };
+
+  const fetchFollowing = async (userId: string) => {
+    const { data, error } = await supabase
+      .from('follows')
+      .select(`
+        following:user_profiles!follows_following_id_fkey(*)
+      `)
+      .eq('follower_id', userId);
+
+    if (error) {
+      console.error('Error fetching following:', error);
+      return;
+    }
+    setFollowing((data || []).map((item: any) => item.following).filter(Boolean));
   };
 
   const checkFollowStatus = async () => {
@@ -296,11 +394,17 @@ export default function ProfilePage() {
           )}
 
           <div className="flex gap-4">
-            <button className="hover:underline">
+            <button 
+              onClick={() => setActiveTab('Following')}
+              className="hover:underline"
+            >
               <span className="font-bold">{formatNumber(profile.following_count)}</span>{' '}
               <span className="text-muted-foreground">Following</span>
             </button>
-            <button className="hover:underline">
+            <button 
+              onClick={() => setActiveTab('Followers')}
+              className="hover:underline"
+            >
               <span className="font-bold">{formatNumber(profile.followers_count)}</span>{' '}
               <span className="text-muted-foreground">Followers</span>
             </button>
@@ -365,10 +469,140 @@ export default function ProfilePage() {
           )
         )}
 
-        {activeTab !== 'Posts' && activeTab !== 'Threads' && (
-          <div className="text-center py-12 text-muted-foreground">
-            <p>Coming soon</p>
-          </div>
+        {activeTab === 'Replies' && (
+          replies.length > 0 ? (
+            replies.map((reply: any) => (
+              <div key={reply.id} className="border-b border-border p-4 hover:bg-muted/5">
+                <p className="text-sm text-muted-foreground mb-2">Replying to @{reply.posts?.user_profiles?.username}</p>
+                <p className="mb-2">{reply.content}</p>
+                <button 
+                  onClick={() => navigate(`/post/${reply.post_id}`)}
+                  className="text-sm text-primary hover:underline"
+                >
+                  View conversation
+                </button>
+              </div>
+            ))
+          ) : (
+            <div className="text-center py-12 text-muted-foreground">
+              <p>No replies yet</p>
+            </div>
+          )
+        )}
+
+        {activeTab === 'Media' && (
+          media.length > 0 ? (
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-2 p-2">
+              {media.map((post) => {
+                const mediaUrl = post.video_url || post.image_url || post.media_urls?.[0];
+                return (
+                  <div
+                    key={post.id}
+                    onClick={() => navigate(`/post/${post.id}`)}
+                    className="aspect-square bg-muted rounded-lg overflow-hidden cursor-pointer hover:opacity-80 transition-opacity"
+                  >
+                    {post.is_video || post.video_url ? (
+                      <video src={mediaUrl} className="w-full h-full object-cover" />
+                    ) : (
+                      <img src={mediaUrl} alt="Media" className="w-full h-full object-cover" />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="text-center py-12 text-muted-foreground">
+              <p>No media yet</p>
+            </div>
+          )
+        )}
+
+        {activeTab === 'Likes' && (
+          likedPosts.length > 0 ? (
+            likedPosts.map((post) => (
+              <PostCard key={post.id} post={post} onUpdate={fetchProfile} />
+            ))
+          ) : (
+            <div className="text-center py-12 text-muted-foreground">
+              <p>No liked posts yet</p>
+            </div>
+          )
+        )}
+
+        {activeTab === 'Followers' && (
+          followers.length > 0 ? (
+            <div className="divide-y divide-border">
+              {followers.map((follower) => (
+                <div key={follower.id} className="p-4 hover:bg-muted/5 flex items-center justify-between">
+                  <div 
+                    className="flex items-center space-x-3 flex-1 cursor-pointer"
+                    onClick={() => navigate(`/profile/${follower.username}`)}
+                  >
+                    <div className="w-12 h-12 rounded-full bg-muted overflow-hidden">
+                      {follower.avatar_url ? (
+                        <img src={follower.avatar_url} alt={follower.username} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-lg font-bold">
+                          {follower.username[0].toUpperCase()}
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1">
+                        <span className="font-bold">{follower.username}</span>
+                        {follower.verified && (
+                          <BadgeCheck className="w-4 h-4 text-primary" fill="currentColor" />
+                        )}
+                      </div>
+                      <p className="text-sm text-muted-foreground line-clamp-1">{follower.bio || `@${follower.username}`}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-12 text-muted-foreground">
+              <p>No followers yet</p>
+            </div>
+          )
+        )}
+
+        {activeTab === 'Following' && (
+          following.length > 0 ? (
+            <div className="divide-y divide-border">
+              {following.map((followedUser) => (
+                <div key={followedUser.id} className="p-4 hover:bg-muted/5 flex items-center justify-between">
+                  <div 
+                    className="flex items-center space-x-3 flex-1 cursor-pointer"
+                    onClick={() => navigate(`/profile/${followedUser.username}`)}
+                  >
+                    <div className="w-12 h-12 rounded-full bg-muted overflow-hidden">
+                      {followedUser.avatar_url ? (
+                        <img src={followedUser.avatar_url} alt={followedUser.username} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-lg font-bold">
+                          {followedUser.username[0].toUpperCase()}
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1">
+                        <span className="font-bold">{followedUser.username}</span>
+                        {followedUser.verified && (
+                          <BadgeCheck className="w-4 h-4 text-primary" fill="currentColor" />
+                        )}
+                      </div>
+                      <p className="text-sm text-muted-foreground line-clamp-1">{followedUser.bio || `@${followedUser.username}`}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-12 text-muted-foreground">
+              <p>Not following anyone yet</p>
+            </div>
+          )
         )}
       </div>
 

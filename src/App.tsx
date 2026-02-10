@@ -38,6 +38,9 @@ import CreateThreadPage from '@/pages/CreateThreadPage';
 import ThreadDetailPage from '@/pages/ThreadDetailPage';
 import HistoryPage from '@/pages/HistoryPage';
 import HelpPage from '@/pages/HelpPage';
+import WalletPage from '@/pages/WalletPage';
+import CreateAdPage from '@/pages/CreateAdPage';
+import MyAdsPage from '@/pages/MyAdsPage';
 
 export default function App() {
   return (
@@ -79,6 +82,9 @@ export default function App() {
               <Route path="/thread/:id" element={<ThreadDetailPage />} />
               <Route path="/history" element={<HistoryPage />} />
               <Route path="/help" element={<HelpPage />} />
+              <Route path="/wallet" element={<WalletPage />} />
+              <Route path="/create-ad" element={<CreateAdPage />} />
+              <Route path="/my-ads" element={<MyAdsPage />} />
             </Routes>
           </main>
           <RightSidebar />
