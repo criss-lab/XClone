@@ -98,7 +98,10 @@ export default function SettingsPage() {
         {/* Help & Support */}
         <div className="p-4">
           <h2 className="text-lg font-bold mb-4">Help & Support</h2>
-          <button className="flex items-center gap-3 w-full p-3 hover:bg-muted rounded-lg text-left">
+          <button 
+            onClick={() => navigate('/help')}
+            className="flex items-center gap-3 w-full p-3 hover:bg-muted rounded-lg text-left"
+          >
             <HelpCircle className="w-5 h-5 text-muted-foreground" />
             <div>
               <p className="font-semibold">Help Center</p>

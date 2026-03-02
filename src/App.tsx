@@ -41,6 +41,7 @@ import HelpPage from '@/pages/HelpPage';
 import WalletPage from '@/pages/WalletPage';
 import CreateAdPage from '@/pages/CreateAdPage';
 import MyAdsPage from '@/pages/MyAdsPage';
+import ListDetailPage from '@/pages/ListDetailPage';
 
 export default function App() {
   return (
@@ -85,6 +86,7 @@ export default function App() {
               <Route path="/wallet" element={<WalletPage />} />
               <Route path="/create-ad" element={<CreateAdPage />} />
               <Route path="/my-ads" element={<MyAdsPage />} />
+              <Route path="/lists/:id" element={<ListDetailPage />} />
             </Routes>
           </main>
           <RightSidebar />

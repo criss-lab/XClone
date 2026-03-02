@@ -2,23 +2,31 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { TopBar } from '@/components/layout/TopBar';
 import { Input } from '@/components/ui/input';
-import { Search, TrendingUp } from 'lucide-react';
+import { Search, TrendingUp, Hash } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { TrendingTopic } from '@/types';
+import { PostCard } from '@/components/features/PostCard';
+import { formatNumber } from '@/lib/utils';
 
 export default function ExplorePage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('For You');
   const [trending, setTrending] = useState<TrendingTopic[]>([]);
+  const [rankedPosts, setRankedPosts] = useState<any[]>([]);
+  const [trendingHashtags, setTrendingHashtags] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
   const tabs = ['For You', 'Trending', 'News', 'Sports', 'Entertainment'];
 
   useEffect(() => {
     fetchTrending();
-  }, []);
+    fetchRankedContent();
+    fetchTrendingHashtags();
+  }, [activeTab]);
 
   const fetchTrending = async () => {
+    setLoading(true);
     try {
       // First refresh trending topics from real data
       await supabase.rpc('refresh_trending_topics');
@@ -34,6 +42,49 @@ export default function ExplorePage() {
       setTrending(data || []);
     } catch (error) {
       console.error('Error fetching trending:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchRankedContent = async () => {
+    setLoading(true);
+    try {
+      // Fetch top posts by engagement
+      const { data } = await supabase
+        .from('posts')
+        .select(`
+          *,
+          user_profiles (*)
+        `)
+        .order('likes_count', { ascending: false })
+        .order('created_at', { ascending: false })
+        .limit(30);
+
+      setRankedPosts(data || []);
+    } catch (error) {
+      console.error('Error fetching ranked content:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchTrendingHashtags = async () => {
+    try {
+      const { data } = await supabase
+        .from('trending_hashtags')
+        .select(`
+          *,
+          hashtags (*)
+        `)
+        .order('trend_score', { ascending: false })
+        .limit(20);
+
+      if (data) {
+        setTrendingHashtags(data.map((t: any) => t.hashtags).filter(Boolean));
+      }
+    } catch (error) {
+      console.error('Error fetching trending hashtags:', error);
     }
   };
 
@@ -85,43 +136,127 @@ export default function ExplorePage() {
         </div>
       </div>
 
-      <div className="divide-y divide-border">
-        {filteredTrending.length > 0 ? (
-          filteredTrending.map((topic, index) => (
-            <div 
-              key={topic.id} 
-              className="p-4 hover:bg-muted/5 cursor-pointer transition-colors"
-              onClick={() => {
-                if (topic.topic.startsWith('#')) {
-                  navigate(`/hashtag/${topic.topic.substring(1)}`);
-                } else {
-                  navigate(`/search?q=${encodeURIComponent(topic.topic)}`);
-                }
-              }}
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center space-x-2 text-muted-foreground text-sm">
-                    <span className="font-semibold">{index + 1}</span>
-                    <span>·</span>
-                    <span>{topic.category}</span>
-                    <span>·</span>
-                    <span>Trending</span>
-                  </div>
-                  <h3 className="font-bold text-foreground mt-1 text-lg">{topic.topic}</h3>
-                  <p className="text-muted-foreground text-sm mt-1">
-                    {topic.posts_count.toLocaleString()} posts
-                  </p>
+      <div>
+        {activeTab === 'For You' && (
+          <>
+            {/* Trending Hashtags Section */}
+            {trendingHashtags.length > 0 && (
+              <div className="border-b border-border">
+                <div className="p-4 bg-muted/30">
+                  <h2 className="font-bold text-lg flex items-center gap-2">
+                    <Hash className="w-5 h-5" />
+                    Trending Hashtags
+                  </h2>
                 </div>
-                <TrendingUp className="w-5 h-5 text-primary" />
+                <div className="grid grid-cols-2 gap-3 p-4">
+                  {trendingHashtags.slice(0, 6).map((hashtag: any) => (
+                    <button
+                      key={hashtag.id}
+                      onClick={() => navigate(`/hashtag/${hashtag.tag}`)}
+                      className="p-3 border border-border rounded-xl hover:bg-muted/50 text-left transition-colors"
+                    >
+                      <p className="font-bold text-primary">#{hashtag.tag}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {formatNumber(hashtag.usage_count)} posts
+                      </p>
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
-          ))
-        ) : (
-          <div className="p-8 text-center text-muted-foreground">
-            <TrendingUp className="w-12 h-12 mx-auto mb-4 opacity-50" />
-            <p className="font-semibold text-lg mb-2">No trending topics</p>
-            <p className="text-sm">Check back later for what's trending</p>
+            )}
+
+            {/* Ranked Content Section */}
+            {rankedPosts.length > 0 && (
+              <div>
+                <div className="p-4 bg-muted/30 border-b border-border">
+                  <h2 className="font-bold text-lg flex items-center gap-2">
+                    <TrendingUp className="w-5 h-5" />
+                    Top Posts
+                  </h2>
+                </div>
+                {rankedPosts.map((post) => (
+                  <PostCard key={post.id} post={post} onUpdate={fetchRankedContent} />
+                ))}
+              </div>
+            )}
+          </>
+        )}
+
+        {activeTab === 'Trending' && (
+          <div className="divide-y divide-border">
+            {filteredTrending.length > 0 ? (
+              filteredTrending.map((topic, index) => (
+                <div 
+                  key={topic.id} 
+                  className="p-4 hover:bg-muted/5 cursor-pointer transition-colors"
+                  onClick={() => {
+                    if (topic.topic.startsWith('#')) {
+                      navigate(`/hashtag/${topic.topic.substring(1)}`);
+                    } else {
+                      navigate(`/search?q=${encodeURIComponent(topic.topic)}`);
+                    }
+                  }}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center space-x-2 text-muted-foreground text-sm">
+                        <span className="font-semibold">{index + 1}</span>
+                        <span>·</span>
+                        <span>{topic.category}</span>
+                        <span>·</span>
+                        <span>Trending</span>
+                      </div>
+                      <h3 className="font-bold text-foreground mt-1 text-lg">{topic.topic}</h3>
+                      <p className="text-muted-foreground text-sm mt-1">
+                        {topic.posts_count.toLocaleString()} posts
+                      </p>
+                    </div>
+                    <TrendingUp className="w-5 h-5 text-primary" />
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="p-8 text-center text-muted-foreground">
+                <TrendingUp className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                <p className="font-semibold text-lg mb-2">No trending topics</p>
+                <p className="text-sm">Check back later for what's trending</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {(activeTab === 'News' || activeTab === 'Sports' || activeTab === 'Entertainment') && (
+          <div className="divide-y divide-border">
+            {filteredTrending.length > 0 ? (
+              filteredTrending.map((topic, index) => (
+                <div 
+                  key={topic.id} 
+                  className="p-4 hover:bg-muted/5 cursor-pointer transition-colors"
+                  onClick={() => navigate(`/search?q=${encodeURIComponent(topic.topic)}`)}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center space-x-2 text-muted-foreground text-sm">
+                        <span className="font-semibold">{index + 1}</span>
+                        <span>·</span>
+                        <span>{topic.category}</span>
+                      </div>
+                      <h3 className="font-bold text-foreground mt-1 text-lg">{topic.topic}</h3>
+                      <p className="text-muted-foreground text-sm mt-1">
+                        {topic.posts_count.toLocaleString()} posts
+                      </p>
+                    </div>
+                    <TrendingUp className="w-5 h-5 text-primary" />
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="p-8 text-center text-muted-foreground">
+                <TrendingUp className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                <p className="font-semibold text-lg mb-2">No {activeTab.toLowerCase()} topics</p>
+                <p className="text-sm">Check back later</p>
+              </div>
+            )}
           </div>
         )}
       </div>

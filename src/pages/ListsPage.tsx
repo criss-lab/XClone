@@ -4,6 +4,10 @@ import { supabase } from '@/lib/supabase';
 import { List, Plus, Lock, Globe, Users, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { TopBar } from '@/components/layout/TopBar';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
 
 export function ListsPage() {
   const { user } = useAuth();
@@ -49,7 +53,9 @@ export function ListsPage() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto">
+    <div className="min-h-screen bg-background pb-16 md:pb-0">
+      <TopBar title="Lists" showBack />
+      <div className="max-w-2xl mx-auto">
       <div className="border-b border-border p-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <List className="w-6 h-6" />
@@ -117,6 +123,7 @@ export function ListsPage() {
             ))}
           </div>
         )}
+      </div>
       </div>
 
       {showCreateDialog && (
