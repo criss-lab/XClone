@@ -264,15 +264,17 @@ export default function MessagesPage() {
               {searchResults.length > 0 && (
                 <div className="mt-2 bg-background border border-border rounded-lg max-h-60 overflow-y-auto">
                   {searchResults.map((result) => (
-                    <button
+                    <div
                       key={result.id}
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
                         startConversationWithUser(result.username);
                         setShowUserSearch(false);
                         setSearchQuery('');
                         setSearchResults([]);
                       }}
-                      className="w-full p-3 hover:bg-muted flex items-center gap-3 text-left"
+                      className="w-full p-3 hover:bg-muted flex items-center gap-3 cursor-pointer"
                     >
                       <div className="w-10 h-10 rounded-full bg-muted overflow-hidden">
                         {result.avatar_url ? (
@@ -290,7 +292,7 @@ export default function MessagesPage() {
                         </div>
                         <p className="text-sm text-muted-foreground truncate">@{result.username}</p>
                       </div>
-                    </button>
+                    </div>
                   ))}
                 </div>
               )}

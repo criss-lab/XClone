@@ -36,9 +36,14 @@ export default function CommunityPage() {
   useEffect(() => {
     if (name) {
       fetchCommunity();
-      fetchPosts();
     }
   }, [name]);
+
+  useEffect(() => {
+    if (community) {
+      fetchPosts();
+    }
+  }, [community, isMember]);
 
   const fetchCommunity = async () => {
     if (!name) return;
@@ -88,6 +93,12 @@ export default function CommunityPage() {
         .single();
 
       if (!communityData) return;
+
+      // Only fetch posts if user is a member
+      if (!isMember) {
+        setPosts([]);
+        return;
+      }
 
       const { data } = await supabase
         .from('posts')
@@ -213,20 +224,35 @@ export default function CommunityPage() {
       </div>
 
       {/* Posts */}
-      {isMember && <ComposePost onSuccess={fetchPosts} communityId={community.id} />}
-
-      <div>
-        {posts.length === 0 ? (
-          <div className="text-center py-12 text-muted-foreground">
-            <p className="text-lg font-semibold mb-2">No posts yet</p>
-            <p className="text-sm">
-              {isMember ? 'Be the first to post in this community!' : 'Join to start posting!'}
-            </p>
+      {!isMember ? (
+        <div className="text-center py-12 text-muted-foreground border-b border-border">
+          <p className="text-lg font-semibold mb-2">Private Community</p>
+          <p className="text-sm mb-4">
+            Join this community to see posts and start engaging
+          </p>
+          {user && (
+            <Button onClick={handleJoinToggle} className="rounded-full">
+              Join Community
+            </Button>
+          )}
+        </div>
+      ) : (
+        <>
+          <ComposePost onSuccess={fetchPosts} communityId={community.id} />
+          <div>
+            {posts.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground">
+                <p className="text-lg font-semibold mb-2">No posts yet</p>
+                <p className="text-sm">
+                  Be the first to post in this community!
+                </p>
+              </div>
+            ) : (
+              posts.map((post) => <PostCard key={post.id} post={post} onUpdate={fetchPosts} />)
+            )}
           </div>
-        ) : (
-          posts.map((post) => <PostCard key={post.id} post={post} onUpdate={fetchPosts} />)
-        )}
-      </div>
+        </>
+      )}
     </div>
   );
 }

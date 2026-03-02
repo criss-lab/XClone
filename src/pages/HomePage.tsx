@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ComposePost } from '@/components/features/ComposePost';
 import { PostCard } from '@/components/features/PostCard';
 import { UserSuggestions } from '@/components/features/UserSuggestions';
@@ -7,43 +8,64 @@ import { supabase } from '@/lib/supabase';
 import { Post } from '@/types';
 import { useAuth } from '@/hooks/useAuth';
 import { useInfiniteScroll } from '@/hooks/useInfiniteScroll';
-import { Loader2, Sparkles } from 'lucide-react';
+import { Loader2, Sparkles, Hash, MessageCircle, Repeat2, Heart } from 'lucide-react';
+import { formatDistanceToNow } from 'date-fns';
+import { formatNumber } from '@/lib/utils';
 
 const PAGE_SIZE = 10;
 
+type FeedItem = 
+  | { type: 'post'; data: Post }
+  | { type: 'thread'; data: any };
+
 export default function HomePage() {
   const { user } = useAuth();
-  const [posts, setPosts] = useState<Post[]>([]);
+  const navigate = useNavigate();
+  const [feedItems, setFeedItems] = useState<FeedItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'foryou' | 'following'>('foryou');
   const [page, setPage] = useState(0);
 
   useEffect(() => {
-    fetchInitialPosts();
+    fetchInitialFeed();
   }, [activeTab, user]);
 
-  const fetchInitialPosts = async () => {
+  const fetchInitialFeed = async () => {
     setLoading(true);
-    setPosts([]);
+    setFeedItems([]);
     setPage(0);
-    const newPosts = await fetchPosts(0);
-    setPosts(newPosts);
+    const newItems = await fetchFeed(0);
+    setFeedItems(newItems);
     setLoading(false);
   };
 
-  const fetchPosts = async (pageNum: number): Promise<Post[]> => {
+  const fetchFeed = async (pageNum: number): Promise<FeedItem[]> => {
     try {
-      let query = supabase
+      const items: FeedItem[] = [];
+      
+      // Fetch posts
+      let postsQuery = supabase
         .from('posts')
         .select(`
           *,
           user_profiles (*)
         `)
+        .is('community_id', null)
         .order('created_at', { ascending: false })
-        .range(pageNum * PAGE_SIZE, (pageNum + 1) * PAGE_SIZE - 1);
+        .limit(PAGE_SIZE);
+
+      // Fetch threads
+      let threadsQuery = supabase
+        .from('threads')
+        .select(`
+          *,
+          user_profiles (*)
+        `)
+        .eq('is_published', true)
+        .order('created_at', { ascending: false })
+        .limit(PAGE_SIZE);
 
       if (activeTab === 'following' && user) {
-        // Get posts from users the current user follows
         const { data: followingData } = await supabase
           .from('follows')
           .select('following_id')
@@ -55,33 +77,45 @@ export default function HomePage() {
           return [];
         }
 
-        query = query.in('user_id', followingIds);
+        postsQuery = postsQuery.in('user_id', followingIds);
+        threadsQuery = threadsQuery.in('user_id', followingIds);
       }
 
-      const { data, error } = await query;
+      const [postsResult, threadsResult] = await Promise.all([
+        postsQuery,
+        threadsQuery
+      ]);
 
-      if (error) throw error;
-      return data || [];
+      // Combine and sort by created_at
+      const posts = (postsResult.data || []).map(p => ({ type: 'post' as const, data: p, created_at: p.created_at }));
+      const threads = (threadsResult.data || []).map(t => ({ type: 'thread' as const, data: t, created_at: t.created_at }));
+      
+      const combined = [...posts, ...threads]
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        .slice(pageNum * PAGE_SIZE, (pageNum + 1) * PAGE_SIZE)
+        .map(({ type, data }) => ({ type, data }));
+
+      return combined;
     } catch (error) {
-      console.error('Error fetching posts:', error);
+      console.error('Error fetching feed:', error);
       return [];
     }
   };
 
-  const loadMorePosts = async (): Promise<boolean> => {
+  const loadMoreFeed = async (): Promise<boolean> => {
     const nextPage = page + 1;
-    const newPosts = await fetchPosts(nextPage);
+    const newItems = await fetchFeed(nextPage);
     
-    if (newPosts.length > 0) {
-      setPosts((prev) => [...prev, ...newPosts]);
+    if (newItems.length > 0) {
+      setFeedItems((prev) => [...prev, ...newItems]);
       setPage(nextPage);
-      return newPosts.length === PAGE_SIZE;
+      return newItems.length === PAGE_SIZE;
     }
     
     return false;
   };
 
-  const { lastElementRef, loading: loadingMore } = useInfiniteScroll(loadMorePosts);
+  const { lastElementRef, loading: loadingMore } = useInfiniteScroll(loadMoreFeed);
 
   return (
     <div className="min-h-screen bg-background pb-16 lg:pb-0">
@@ -115,31 +149,35 @@ export default function HomePage() {
         </div>
       </div>
 
-      <ComposePost onSuccess={fetchInitialPosts} />
+      <ComposePost onSuccess={fetchInitialFeed} />
 
       <div>
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="w-8 h-8 animate-spin text-primary" />
           </div>
-        ) : posts.length === 0 ? (
+        ) : feedItems.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground">
-            <p className="text-lg font-semibold mb-2">No posts yet</p>
+            <p className="text-lg font-semibold mb-2">No content yet</p>
             <p className="text-sm">
               {activeTab === 'following'
-                ? 'Follow some users to see their posts here'
+                ? 'Follow some users to see their posts and threads here'
                 : 'Be the first to post!'}
             </p>
           </div>
         ) : (
           <>
-            {posts.map((post, index) => (
+            {feedItems.map((item, index) => (
               <div 
-                key={post.id}
-                ref={index === posts.length - 1 ? lastElementRef : null}
+                key={`${item.type}-${item.data.id}`}
+                ref={index === feedItems.length - 1 ? lastElementRef : null}
                 className="animate-slide-in"
               >
-                <PostCard post={post} onUpdate={fetchInitialPosts} />
+                {item.type === 'post' ? (
+                  <PostCard post={item.data} onUpdate={fetchInitialFeed} />
+                ) : (
+                  <ThreadCard thread={item.data} />
+                )}
               </div>
             ))}
             {loadingMore && (
@@ -153,6 +191,86 @@ export default function HomePage() {
 
       <div className="hidden lg:block fixed right-8 top-20 w-80">
         <UserSuggestions />
+      </div>
+    </div>
+  );
+}
+
+function ThreadCard({ thread }: { thread: any }) {
+  const navigate = useNavigate();
+  const [coverImage, setCoverImage] = useState('');
+
+  useEffect(() => {
+    if (thread.cover_image) {
+      setCoverImage(thread.cover_image);
+    }
+  }, [thread.cover_image]);
+
+  return (
+    <div
+      onClick={() => navigate(`/thread/${thread.id}`)}
+      className="border-b border-border p-4 hover:bg-muted/50 cursor-pointer transition-colors"
+    >
+      <div className="flex gap-3">
+        <div className="w-12 h-12 rounded-full bg-muted overflow-hidden flex-shrink-0">
+          {thread.user_profiles?.avatar_url ? (
+            <img
+              src={thread.user_profiles.avatar_url}
+              alt={thread.user_profiles.username}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center font-bold">
+              {thread.user_profiles?.username?.[0]?.toUpperCase()}
+            </div>
+          )}
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="font-semibold hover:underline">
+              {thread.user_profiles?.username}
+            </span>
+            <span className="text-muted-foreground">·</span>
+            <span className="text-sm text-muted-foreground">
+              {formatDistanceToNow(new Date(thread.created_at), { addSuffix: true })}
+            </span>
+          </div>
+
+          <div className="mb-3">
+            <div className="flex items-center gap-2 mb-2">
+              <Hash className="w-4 h-4 text-primary" />
+              <h3 className="font-bold text-lg">{thread.title}</h3>
+            </div>
+            <p className="text-muted-foreground line-clamp-2">{thread.content}</p>
+          </div>
+
+          {coverImage && (
+            <div className="mb-3 rounded-xl overflow-hidden border border-border">
+              <img
+                src={coverImage}
+                alt={thread.title}
+                className="w-full max-h-60 object-cover"
+                loading="lazy"
+              />
+            </div>
+          )}
+
+          <div className="flex items-center gap-6 text-muted-foreground">
+            <button className="flex items-center gap-2 hover:text-primary transition-colors group">
+              <MessageCircle className="w-5 h-5 group-hover:fill-primary/10" />
+              <span className="text-sm">{formatNumber(thread.replies_count || 0)}</span>
+            </button>
+            <button className="flex items-center gap-2 hover:text-green-500 transition-colors group">
+              <Repeat2 className="w-5 h-5" />
+              <span className="text-sm">{formatNumber(thread.reposts_count || 0)}</span>
+            </button>
+            <button className="flex items-center gap-2 hover:text-red-500 transition-colors group">
+              <Heart className="w-5 h-5 group-hover:fill-red-500/20" />
+              <span className="text-sm">{formatNumber(thread.likes_count || 0)}</span>
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
