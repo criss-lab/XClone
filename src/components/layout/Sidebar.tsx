@@ -82,7 +82,8 @@ export function Sidebar() {
     { icon: Bookmark, label: 'Bookmarks', path: '/bookmarks', requireAuth: true },
     { icon: List, label: 'Lists', path: '/lists', requireAuth: true },
     { icon: History, label: 'History', path: '/history', requireAuth: true },
-    { icon: Wallet, label: 'My Wallet', path: '/wallet', requireAuth: true },
+    { icon: Wallet, label: 'Wallet', path: '/wallet', requireAuth: true },
+    { icon: DollarSign, label: 'Payouts', path: '/payouts', requireAuth: true },
     { icon: Megaphone, label: 'My Ads', path: '/my-ads', requireAuth: true },
   ];
 
