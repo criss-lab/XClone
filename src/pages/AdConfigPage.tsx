@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { DollarSign, Settings, Plus, Trash2, Toggle, Loader2 } from 'lucide-react';
+import { DollarSign, Settings, Plus, Trash2, Power, Loader2 } from 'lucide-react';
 
 interface AdPlacement {
   id: string;
@@ -346,8 +346,9 @@ export default function AdConfigPage() {
                         onClick={() => togglePlacement(placement.id, placement.is_active)}
                         size="sm"
                         variant="outline"
+                        title={placement.is_active ? 'Deactivate' : 'Activate'}
                       >
-                        <Toggle className="w-4 h-4" />
+                        <Power className="w-4 h-4" />
                       </Button>
                       <Button
                         onClick={() => deletePlacement(placement.id)}
