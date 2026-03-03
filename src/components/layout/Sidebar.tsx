@@ -1,7 +1,7 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
-import { Home, Search, Bell, Mail, User, Hash, Radio, LogOut, Plus, Users, TrendingUp, Sparkles, Bookmark, List, DollarSign, BarChart3, ShoppingBag, Calendar, Crown, Briefcase, Settings, HelpCircle, History, ChevronDown, ChevronUp, FileText, Wallet, Megaphone } from 'lucide-react';
+import { Home, Search, Bell, Mail, User, Hash, Radio, LogOut, Plus, Users, TrendingUp, Sparkles, Bookmark, List, DollarSign, BarChart3, ShoppingBag, Calendar, Crown, Briefcase, Settings, HelpCircle, History, ChevronDown, ChevronUp, FileText, Wallet, Megaphone, Shield, LineChart } from 'lucide-react';
 import { authService } from '@/lib/auth';
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
@@ -76,6 +76,11 @@ export function Sidebar() {
     { icon: DollarSign, label: 'Monetization', path: '/monetization', requireAuth: true },
     { icon: ShoppingBag, label: 'Products', path: '/products', requireAuth: true },
     { icon: Calendar, label: 'Scheduled', path: '/scheduled', requireAuth: true },
+  ];
+
+  const adminTools = [
+    { icon: LineChart, label: 'Revenue Analytics', path: '/revenue-analytics', requireAuth: true },
+    { icon: Shield, label: 'Fraud Detection', path: '/fraud-detection', requireAuth: true },
   ];
 
   const userTools = [
@@ -173,6 +178,34 @@ export function Sidebar() {
             </div>
             <div className="space-y-1">
               {creatorTools.map((item) => {
+                const Icon = item.icon;
+                const isActive = location.pathname === item.path;
+
+                return (
+                  <button
+                    key={item.path}
+                    onClick={() => handleNavClick(item.path, item.requireAuth)}
+                    className={`flex items-center space-x-3 px-4 py-2 rounded-lg transition-colors w-full text-left text-sm ${
+                      isActive
+                        ? 'bg-primary/10 text-primary font-medium'
+                        : 'hover:bg-muted text-foreground'
+                    }`}
+                  >
+                    <Icon className="w-4 h-4" />
+                    <span>{item.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Admin Tools */}
+            <div className="mt-6 mb-2">
+              <h3 className="px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                Admin Tools
+              </h3>
+            </div>
+            <div className="space-y-1">
+              {adminTools.map((item) => {
                 const Icon = item.icon;
                 const isActive = location.pathname === item.path;
 

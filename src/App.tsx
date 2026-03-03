@@ -44,6 +44,8 @@ import MyAdsPage from '@/pages/MyAdsPage';
 import ListDetailPage from '@/pages/ListDetailPage';
 import AdConfigPage from '@/pages/AdConfigPage';
 import PayoutsPage from '@/pages/PayoutsPage';
+import RevenueAnalytics from '@/pages/RevenueAnalytics';
+import FraudDetection from '@/pages/FraudDetection';
 
 export default function App() {
   return (
@@ -91,6 +93,8 @@ export default function App() {
               <Route path="/lists/:id" element={<ListDetailPage />} />
               <Route path="/admin/ads" element={<AdConfigPage />} />
               <Route path="/payouts" element={<PayoutsPage />} />
+              <Route path="/revenue-analytics" element={<RevenueAnalytics />} />
+              <Route path="/fraud-detection" element={<FraudDetection />} />
             </Routes>
           </main>
           <RightSidebar />
