@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useWallet } from '@/hooks/useWallet';
 import { supabase } from '@/lib/supabase';
-import { Wallet, TrendingUp, TrendingDown, DollarSign, Loader2, Phone, Mail, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Wallet, TrendingUp, TrendingDown, DollarSign, Loader2, Phone, Mail, AlertCircle, CheckCircle2, Filter, Download, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
@@ -20,12 +20,20 @@ export function WalletDashboard() {
   const [showDeposit, setShowDeposit] = useState(false);
   const [showWithdraw, setShowWithdraw] = useState(false);
   const [savingPayment, setSavingPayment] = useState(false);
+  
+  // Transaction filters
+  const [filterType, setFilterType] = useState<string>('all');
+  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [filterPaymentMethod, setFilterPaymentMethod] = useState<string>('all');
+  const [filterDateFrom, setFilterDateFrom] = useState<string>('');
+  const [filterDateTo, setFilterDateTo] = useState<string>('');
+  const [showFilters, setShowFilters] = useState(false);
 
   useEffect(() => {
     if (user) {
       fetchTransactions();
     }
-  }, [user]);
+  }, [user, filterType, filterStatus, filterPaymentMethod, filterDateFrom, filterDateTo]);
 
   useEffect(() => {
     if (wallet) {
@@ -38,12 +46,33 @@ export function WalletDashboard() {
   const fetchTransactions = async () => {
     if (!user) return;
 
-    const { data } = await supabase
+    let query = supabase
       .from('wallet_transactions')
       .select('*')
-      .eq('user_id', user.id)
+      .eq('user_id', user.id);
+
+    // Apply filters
+    if (filterType !== 'all') {
+      query = query.eq('type', filterType);
+    }
+    if (filterStatus !== 'all') {
+      query = query.eq('status', filterStatus);
+    }
+    if (filterPaymentMethod !== 'all') {
+      query = query.eq('payment_method', filterPaymentMethod);
+    }
+    if (filterDateFrom) {
+      query = query.gte('created_at', new Date(filterDateFrom).toISOString());
+    }
+    if (filterDateTo) {
+      const endDate = new Date(filterDateTo);
+      endDate.setHours(23, 59, 59, 999);
+      query = query.lte('created_at', endDate.toISOString());
+    }
+
+    const { data } = await query
       .order('created_at', { ascending: false })
-      .limit(20);
+      .limit(100);
 
     setTransactions(data || []);
   };
@@ -55,7 +84,6 @@ export function WalletDashboard() {
     }
 
     try {
-      // Create pending transaction
       const { error } = await supabase.from('wallet_transactions').insert({
         wallet_id: wallet.id,
         user_id: user!.id,
@@ -303,7 +331,116 @@ export function WalletDashboard() {
 
       {/* Transaction History */}
       <div className="bg-card border border-border rounded-xl p-6">
-        <h3 className="font-bold mb-4">Recent Transactions</h3>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-bold">Transaction History</h3>
+          <div className="flex gap-2">
+            <Button
+              onClick={() => {
+                const csv = generateCSV(transactions);
+                downloadCSV(csv, `transactions-${new Date().toISOString().split('T')[0]}.csv`);
+              }}
+              variant="outline"
+              size="sm"
+            >
+              <Download className="w-4 h-4 mr-2" />
+              Export CSV
+            </Button>
+            <Button
+              onClick={() => setShowFilters(!showFilters)}
+              variant="outline"
+              size="sm"
+            >
+              <Filter className="w-4 h-4 mr-2" />
+              {showFilters ? 'Hide' : 'Show'} Filters
+            </Button>
+          </div>
+        </div>
+
+        {/* Filters */}
+        {showFilters && (
+          <div className="bg-muted/50 rounded-lg p-4 mb-4 space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+              <div>
+                <label className="text-xs font-semibold mb-1 block">Type</label>
+                <select
+                  value={filterType}
+                  onChange={(e) => setFilterType(e.target.value)}
+                  className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm"
+                >
+                  <option value="all">All Types</option>
+                  <option value="deposit">Deposit</option>
+                  <option value="withdrawal">Withdrawal</option>
+                  <option value="earnings">Earnings</option>
+                  <option value="platform_share">Platform Share</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="text-xs font-semibold mb-1 block">Status</label>
+                <select
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value)}
+                  className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm"
+                >
+                  <option value="all">All Status</option>
+                  <option value="pending">Pending</option>
+                  <option value="completed">Completed</option>
+                  <option value="failed">Failed</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="text-xs font-semibold mb-1 block">Payment Method</label>
+                <select
+                  value={filterPaymentMethod}
+                  onChange={(e) => setFilterPaymentMethod(e.target.value)}
+                  className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm"
+                >
+                  <option value="all">All Methods</option>
+                  <option value="mpesa">M-Pesa</option>
+                  <option value="paypal">PayPal</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="text-xs font-semibold mb-1 block">Date Range</label>
+                <div className="flex gap-1">
+                  <Input
+                    type="date"
+                    value={filterDateFrom}
+                    onChange={(e) => setFilterDateFrom(e.target.value)}
+                    className="text-xs h-9"
+                    placeholder="From"
+                  />
+                  <Input
+                    type="date"
+                    value={filterDateTo}
+                    onChange={(e) => setFilterDateTo(e.target.value)}
+                    className="text-xs h-9"
+                    placeholder="To"
+                  />
+                </div>
+              </div>
+            </div>
+            
+            <Button
+              onClick={() => {
+                setFilterType('all');
+                setFilterStatus('all');
+                setFilterPaymentMethod('all');
+                setFilterDateFrom('');
+                setFilterDateTo('');
+              }}
+              variant="outline"
+              size="sm"
+              className="w-full"
+            >
+              <X className="w-4 h-4 mr-2" />
+              Clear All Filters
+            </Button>
+          </div>
+        )}
+
         {transactions.length === 0 ? (
           <p className="text-center text-muted-foreground py-8">No transactions yet</p>
         ) : (
@@ -350,4 +487,34 @@ export function WalletDashboard() {
       </div>
     </div>
   );
+}
+
+// CSV generation helpers
+function generateCSV(transactions: any[]): string {
+  const headers = ['Date', 'Type', 'Amount', 'Status', 'Payment Method', 'Description'];
+  const rows = transactions.map(tx => [
+    new Date(tx.created_at).toLocaleString(),
+    tx.type,
+    tx.amount,
+    tx.status,
+    tx.payment_method || 'N/A',
+    tx.description || ''
+  ]);
+  
+  const csv = [
+    headers.join(','),
+    ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+  ].join('\n');
+  
+  return csv;
+}
+
+function downloadCSV(csv: string, filename: string) {
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  window.URL.revokeObjectURL(url);
 }

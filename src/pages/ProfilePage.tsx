@@ -5,6 +5,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { TopBar } from '@/components/layout/TopBar';
 import { PostCard } from '@/components/features/PostCard';
 import { EditProfileDialog } from '@/components/features/EditProfileDialog';
+import { RevenueAnalyticsWidget } from '@/components/features/RevenueAnalyticsWidget';
 import { Calendar, MapPin, Link as LinkIcon, Mail, BadgeCheck, Loader2, ExternalLink, Twitter, Instagram, Linkedin, MessageCircle } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { formatNumber } from '@/lib/utils';
@@ -411,6 +412,13 @@ export default function ProfilePage() {
           </div>
         </div>
       </div>
+
+      {/* Revenue Analytics Widget (for own profile only) */}
+      {isOwnProfile && (
+        <div className="px-4 mt-4">
+          <RevenueAnalyticsWidget />
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="sticky top-14 z-30 bg-background border-b border-border">
