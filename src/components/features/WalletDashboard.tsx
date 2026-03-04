@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
+import { useWallet } from '@/hooks/useWallet';
 import { supabase } from '@/lib/supabase';
-import { Wallet, TrendingUp, TrendingDown, DollarSign, Loader2, Phone, Mail } from 'lucide-react';
+import { Wallet, TrendingUp, TrendingDown, DollarSign, Loader2, Phone, Mail, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
@@ -9,7 +10,7 @@ import { formatNumber } from '@/lib/utils';
 
 export function WalletDashboard() {
   const { user } = useAuth();
-  const [wallet, setWallet] = useState<any>(null);
+  const { wallet, loading: walletLoading, fetchWallet, updatePaymentMethods } = useWallet();
   const [transactions, setTransactions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [depositAmount, setDepositAmount] = useState('');
@@ -18,33 +19,21 @@ export function WalletDashboard() {
   const [paypalEmail, setPaypalEmail] = useState('');
   const [showDeposit, setShowDeposit] = useState(false);
   const [showWithdraw, setShowWithdraw] = useState(false);
+  const [savingPayment, setSavingPayment] = useState(false);
 
   useEffect(() => {
     if (user) {
-      fetchWallet();
       fetchTransactions();
     }
   }, [user]);
 
-  const fetchWallet = async () => {
-    if (!user) return;
-
-    const { data, error } = await supabase
-      .from('user_wallets')
-      .select('*')
-      .eq('user_id', user.id)
-      .single();
-
-    if (error) {
-      console.error('Error fetching wallet:', error);
-      return;
+  useEffect(() => {
+    if (wallet) {
+      setMpesaPhone(wallet.mpesa_phone || '');
+      setPaypalEmail(wallet.paypal_email || '');
+      setLoading(false);
     }
-
-    setWallet(data);
-    setMpesaPhone(data.mpesa_phone || '');
-    setPaypalEmail(data.paypal_email || '');
-    setLoading(false);
-  };
+  }, [wallet]);
 
   const fetchTransactions = async () => {
     if (!user) return;
@@ -121,28 +110,36 @@ export function WalletDashboard() {
     }
   };
 
-  const updatePaymentMethods = async () => {
-    try {
-      const { error } = await supabase
-        .from('user_wallets')
-        .update({
-          mpesa_phone: mpesaPhone,
-          paypal_email: paypalEmail
-        })
-        .eq('user_id', user!.id);
-
-      if (error) throw error;
-
-      toast.success('Payment methods updated');
-    } catch (error: any) {
-      toast.error(error.message);
+  const handleUpdatePaymentMethods = async () => {
+    setSavingPayment(true);
+    const result = await updatePaymentMethods(mpesaPhone, paypalEmail);
+    setSavingPayment(false);
+    
+    if (result.success) {
+      toast.success('Payment methods updated successfully');
+    } else {
+      toast.error(result.error || 'Failed to update payment methods');
     }
   };
 
-  if (loading) {
+  if (loading || walletLoading) {
     return (
       <div className="flex items-center justify-center p-8">
         <Loader2 className="w-6 h-6 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!wallet) {
+    return (
+      <div className="text-center py-12">
+        <AlertCircle className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
+        <h3 className="text-lg font-semibold mb-2">Wallet Not Found</h3>
+        <p className="text-muted-foreground mb-4">We couldn't find your wallet. Creating one now...</p>
+        <Button onClick={fetchWallet}>
+          <Wallet className="w-4 h-4 mr-2" />
+          Create Wallet
+        </Button>
       </div>
     );
   }
@@ -228,35 +225,78 @@ export function WalletDashboard() {
       )}
 
       {/* Payment Methods */}
-      <div className="bg-card border border-border rounded-xl p-6">
-        <h3 className="font-bold mb-4">Payment Methods</h3>
+      <div className="bg-gradient-to-br from-blue-500/5 to-purple-500/5 border-2 border-blue-500/20 rounded-xl p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <DollarSign className="w-5 h-5 text-blue-600" />
+          <h3 className="font-bold text-lg">Payment Methods</h3>
+        </div>
+        
+        <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 mb-4">
+          <div className="flex items-start gap-2">
+            <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+            <div className="text-sm">
+              <p className="font-semibold text-blue-600 mb-1">Connect Your Accounts</p>
+              <p className="text-muted-foreground">
+                Link your M-Pesa and PayPal accounts to receive deposits and withdrawals. 
+                All transactions are secure and encrypted.
+              </p>
+            </div>
+          </div>
+        </div>
+
         <div className="space-y-4">
           <div>
-            <label className="text-sm text-muted-foreground flex items-center gap-2 mb-2">
+            <label className="text-sm font-semibold flex items-center gap-2 mb-2">
               <Phone className="w-4 h-4" />
               M-Pesa Phone Number
+              {mpesaPhone && <CheckCircle2 className="w-4 h-4 text-green-600" />}
             </label>
             <Input
               type="tel"
-              placeholder="+254700000000"
+              placeholder="+254712345678"
               value={mpesaPhone}
               onChange={(e) => setMpesaPhone(e.target.value)}
+              className="border-2"
             />
+            <p className="text-xs text-muted-foreground mt-1">
+              Include country code (e.g., +254 for Kenya)
+            </p>
           </div>
+          
           <div>
-            <label className="text-sm text-muted-foreground flex items-center gap-2 mb-2">
+            <label className="text-sm font-semibold flex items-center gap-2 mb-2">
               <Mail className="w-4 h-4" />
               PayPal Email
+              {paypalEmail && <CheckCircle2 className="w-4 h-4 text-green-600" />}
             </label>
             <Input
               type="email"
-              placeholder="you@example.com"
+              placeholder="your.email@paypal.com"
               value={paypalEmail}
               onChange={(e) => setPaypalEmail(e.target.value)}
+              className="border-2"
             />
+            <p className="text-xs text-muted-foreground mt-1">
+              Must match your verified PayPal account email
+            </p>
           </div>
-          <Button onClick={updatePaymentMethods} className="w-full">
-            Save Payment Methods
+          
+          <Button 
+            onClick={handleUpdatePaymentMethods} 
+            className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+            disabled={savingPayment || (!mpesaPhone && !paypalEmail)}
+          >
+            {savingPayment ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <CheckCircle2 className="w-4 h-4 mr-2" />
+                Save Payment Methods
+              </>
+            )}
           </Button>
         </div>
       </div>

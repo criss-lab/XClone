@@ -11,11 +11,8 @@ interface AdSenseAdProps {
 /**
  * Google AdSense Ad Component
  * 
- * To use this component, you need to:
- * 1. Add AdSense script to index.html:
- *    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-XXXXXXXXXXXXXXXX" crossorigin="anonymous"></script>
- * 2. Replace ca-pub-XXXXXXXXXXXXXXXX with your AdSense publisher ID
- * 3. Get ad unit IDs from your AdSense account
+ * AdSense script is loaded in index.html with client ID: ca-app-pub-7234579833875016
+ * Ad unit IDs are managed via the Ad Configuration page (/admin/ads)
  */
 export function AdSenseAd({
   adSlot,
@@ -40,11 +37,12 @@ export function AdSenseAd({
 
   return (
     <div className={`adsense-container ${className}`}>
+      <div className="text-xs text-center text-muted-foreground mb-1">Advertisement</div>
       <ins
         ref={adRef}
         className="adsbygoogle"
         style={{ display: 'block' }}
-        data-ad-client="ca-pub-XXXXXXXXXXXXXXXX" // Will be replaced by admin config
+        data-ad-client="ca-app-pub-7234579833875016"
         data-ad-slot={adSlot}
         data-ad-format={adFormat}
         data-full-width-responsive={fullWidthResponsive.toString()}

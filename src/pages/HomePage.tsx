@@ -11,6 +11,7 @@ import { useInfiniteScroll } from '@/hooks/useInfiniteScroll';
 import { Loader2, Sparkles, Hash, MessageCircle, Repeat2, Heart } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { formatNumber } from '@/lib/utils';
+import { DynamicAd } from '@/components/features/DynamicAd';
 
 const PAGE_SIZE = 10;
 
@@ -151,6 +152,9 @@ export default function HomePage() {
 
       <ComposePost onSuccess={fetchInitialFeed} />
 
+      {/* Top Ad Placement */}
+      <DynamicAd location="feed_top" className="border-b border-border p-4" />
+
       <div>
         {loading ? (
           <div className="flex items-center justify-center py-12">
@@ -168,15 +172,20 @@ export default function HomePage() {
         ) : (
           <>
             {feedItems.map((item, index) => (
-              <div 
-                key={`${item.type}-${item.data.id}`}
-                ref={index === feedItems.length - 1 ? lastElementRef : null}
-                className="animate-slide-in"
-              >
-                {item.type === 'post' ? (
-                  <PostCard post={item.data} onUpdate={fetchInitialFeed} />
-                ) : (
-                  <ThreadCard thread={item.data} />
+              <div key={`${item.type}-${item.data.id}`}>
+                <div 
+                  ref={index === feedItems.length - 1 ? lastElementRef : null}
+                  className="animate-slide-in"
+                >
+                  {item.type === 'post' ? (
+                    <PostCard post={item.data} onUpdate={fetchInitialFeed} />
+                  ) : (
+                    <ThreadCard thread={item.data} />
+                  )}
+                </div>
+                {/* Inline Ad every 5 posts */}
+                {(index + 1) % 5 === 0 && (
+                  <DynamicAd location="feed_inline" className="border-b border-border p-4" />
                 )}
               </div>
             ))}
