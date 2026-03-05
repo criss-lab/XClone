@@ -80,6 +80,7 @@ export function Sidebar() {
 
   const adminTools = [
     { icon: LineChart, label: 'Revenue Analytics', path: '/revenue-analytics', requireAuth: true },
+    { icon: TrendingUp, label: 'Admin Revenue', path: '/admin/revenue', requireAuth: true },
     { icon: Shield, label: 'Fraud Detection', path: '/fraud-detection', requireAuth: true },
   ];
 

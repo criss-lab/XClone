@@ -47,6 +47,7 @@ import PayoutsPage from '@/pages/PayoutsPage';
 import RevenueAnalytics from '@/pages/RevenueAnalytics';
 import FraudDetection from '@/pages/FraudDetection';
 import AdPerformanceComparison from '@/pages/AdPerformanceComparison';
+import AdminRevenueDashboard from '@/pages/AdminRevenueDashboard';
 
 export default function App() {
   return (
@@ -97,6 +98,7 @@ export default function App() {
               <Route path="/revenue-analytics" element={<RevenueAnalytics />} />
               <Route path="/fraud-detection" element={<FraudDetection />} />
               <Route path="/ad-performance" element={<AdPerformanceComparison />} />
+              <Route path="/admin/revenue" element={<AdminRevenueDashboard />} />
             </Routes>
           </main>
           <RightSidebar />

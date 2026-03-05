@@ -12,6 +12,13 @@ import { BookmarkButton } from './BookmarkButton';
 import { PollCard } from './PollCard';
 import { EditPostDialog } from './EditPostDialog';
 import { BoostPostDialog } from './BoostPostDialog';
+import { OneClickBoost } from './OneClickBoost';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 interface PostCardProps {
   post: Post;
@@ -31,6 +38,7 @@ export function PostCard({ post, onUpdate }: PostCardProps) {
   const [showDeleteMenu, setShowDeleteMenu] = useState(false);
   const [poll, setPoll] = useState<any>(null);
   const [showBoostDialog, setShowBoostDialog] = useState(false);
+  const [showOneClickBoost, setShowOneClickBoost] = useState(false);
 
   // Get media URLs (support both legacy single image and new multi-image)
   const mediaUrls = post.media_urls && post.media_urls.length > 0 
@@ -464,6 +472,21 @@ export function PostCard({ post, onUpdate }: PostCardProps) {
             <div onClick={(e) => e.stopPropagation()}>
               <BookmarkButton postId={post.id} />
             </div>
+
+            {user?.id === post.user_id && (
+              <button
+                className="flex items-center space-x-2 text-muted-foreground hover:text-primary transition-colors group"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowOneClickBoost(true);
+                }}
+                title="Boost Post"
+              >
+                <div className="p-2 rounded-full group-hover:bg-primary/10 transition-colors">
+                  <TrendingUp className="w-5 h-5" />
+                </div>
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -490,6 +513,18 @@ export function PostCard({ post, onUpdate }: PostCardProps) {
             onOpenChange={setShowBoostDialog}
             postId={post.id}
           />
+          <Dialog open={showOneClickBoost} onOpenChange={setShowOneClickBoost}>
+            <DialogContent className="max-w-lg">
+              <DialogHeader>
+                <DialogTitle>Boost Your Post</DialogTitle>
+              </DialogHeader>
+              <OneClickBoost
+                postId={post.id}
+                postContent={post.content}
+                onClose={() => setShowOneClickBoost(false)}
+              />
+            </DialogContent>
+          </Dialog>
         </>
       )}
     </div>

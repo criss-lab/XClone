@@ -12,6 +12,8 @@ import { Loader2, Sparkles, Hash, MessageCircle, Repeat2, Heart } from 'lucide-r
 import { formatDistanceToNow } from 'date-fns';
 import { formatNumber } from '@/lib/utils';
 import { DynamicAd } from '@/components/features/DynamicAd';
+import { VideoAdPlayer } from '@/components/features/VideoAdPlayer';
+import { SponsoredPostCard } from '@/components/features/SponsoredPostCard';
 
 const PAGE_SIZE = 10;
 
@@ -26,10 +28,39 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'foryou' | 'following'>('foryou');
   const [page, setPage] = useState(0);
+  const [sponsoredPosts, setSponsoredPosts] = useState<any[]>([]);
+  const [showVideoAd, setShowVideoAd] = useState(false);
+  const [videoAdShown, setVideoAdShown] = useState(false);
 
   useEffect(() => {
     fetchInitialFeed();
+    fetchSponsoredContent();
   }, [activeTab, user]);
+
+  useEffect(() => {
+    if (!videoAdShown && feedItems.length > 0 && activeTab === 'foryou') {
+      const shouldShowAd = Math.random() < 0.3;
+      if (shouldShowAd) {
+        setShowVideoAd(true);
+        setVideoAdShown(true);
+      }
+    }
+  }, [feedItems, videoAdShown, activeTab]);
+
+  const fetchSponsoredContent = async () => {
+    try {
+      const { data, error } = await supabase.rpc('get_sponsored_posts', {
+        user_id_param: user?.id,
+        limit_param: 3
+      });
+
+      if (!error && data) {
+        setSponsoredPosts(data);
+      }
+    } catch (error) {
+      console.error('Error fetching sponsored content:', error);
+    }
+  };
 
   const fetchInitialFeed = async () => {
     setLoading(true);
@@ -93,10 +124,25 @@ export default function HomePage() {
       
       const combined = [...posts, ...threads]
         .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-        .slice(pageNum * PAGE_SIZE, (pageNum + 1) * PAGE_SIZE)
-        .map(({ type, data }) => ({ type, data }));
+        .slice(pageNum * PAGE_SIZE, (pageNum + 1) * PAGE_SIZE);
 
-      return combined;
+      // Insert sponsored posts organically (every 5-7 items)
+      const withSponsored: any[] = [];
+      let sponsoredIndex = 0;
+      
+      for (let i = 0; i < combined.length; i++) {
+        withSponsored.push(combined[i]);
+        
+        if ((i + 1) % (5 + Math.floor(Math.random() * 3)) === 0 && sponsoredIndex < sponsoredPosts.length) {
+          withSponsored.push({
+            type: 'sponsored',
+            data: sponsoredPosts[sponsoredIndex]
+          });
+          sponsoredIndex++;
+        }
+      }
+
+      return withSponsored.map(({ type, data }) => ({ type, data }));
     } catch (error) {
       console.error('Error fetching feed:', error);
       return [];
@@ -120,6 +166,16 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-background pb-16 lg:pb-0">
+      {showVideoAd && (
+        <VideoAdPlayer
+          videoUrl=""
+          onAdComplete={() => setShowVideoAd(false)}
+          onSkip={() => setShowVideoAd(false)}
+          allowSkip={true}
+          skipAfter={5}
+        />
+      )}
+      
       <TopBar title="Home" />
 
       <div className="sticky top-14 z-30 bg-background/95 backdrop-blur-sm border-b border-border">
@@ -179,6 +235,8 @@ export default function HomePage() {
                 >
                   {item.type === 'post' ? (
                     <PostCard post={item.data} onUpdate={fetchInitialFeed} />
+                  ) : item.type === 'sponsored' ? (
+                    <SponsoredPostCard post={item.data} />
                   ) : (
                     <ThreadCard thread={item.data} />
                   )}
