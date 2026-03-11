@@ -4,6 +4,9 @@
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+                android:value="ca-app-pub-7234579833875016~4829778821"/>
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
