@@ -26,7 +26,6 @@ public class MainActivity extends BridgeActivity {
                 return true;
             } else {
 
-                // Double tap to exit
                 if (lastBackPressed + 2000 > System.currentTimeMillis()) {
                     finish();
                     return true;
@@ -41,21 +40,18 @@ public class MainActivity extends BridgeActivity {
         return super.onKeyDown(keyCode, event);
     }
 
-    // Improve stability when app resumes
     @Override
-    protected void onResume() {
+    public void onResume() {
         super.onResume();
     }
 
-    // Handle pause state properly
     @Override
-    protected void onPause() {
+    public void onPause() {
         super.onPause();
     }
 
-    // Clean exit handling
     @Override
-    protected void onDestroy() {
+    public void onDestroy() {
         super.onDestroy();
     }
 }
