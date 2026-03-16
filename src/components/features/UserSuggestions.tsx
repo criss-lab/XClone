@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { UserSuggestion as UserSuggestionType } from '@/types';
 import { Button } from '@/components/ui/button';
-import { BadgeCheck, Loader2 } from 'lucide-react';
+import { BadgeCheck } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 export function UserSuggestions() {
@@ -16,19 +16,18 @@ export function UserSuggestions() {
   const [followingIds, setFollowingIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    if (user) {
-      fetchSuggestions();
-    }
+    if (user) fetchSuggestions();
   }, [user]);
 
   const fetchSuggestions = async () => {
     if (!user) return;
 
+    setLoading(true);
     try {
-      // Generate suggestions
+      // Generate suggestions server-side
       await supabase.rpc('generate_user_suggestions', { target_user_id: user.id });
 
-      // Fetch suggestions with user data
+      // Fetch top 5 suggestions with related user profiles
       const { data, error } = await supabase
         .from('user_suggestions')
         .select(`
@@ -41,8 +40,8 @@ export function UserSuggestions() {
 
       if (error) throw error;
       setSuggestions(data || []);
-    } catch (error) {
-      console.error('Error fetching suggestions:', error);
+    } catch (err) {
+      console.error('Error fetching suggestions:', err);
     } finally {
       setLoading(false);
     }
@@ -52,21 +51,24 @@ export function UserSuggestions() {
     if (!user) return;
 
     try {
+      // Insert follow
       await supabase.from('follows').insert({
         follower_id: user.id,
         following_id: userId,
       });
 
+      // Insert notification for the followed user
       await supabase.from('notifications').insert({
         user_id: userId,
         type: 'follow',
         from_user_id: user.id,
       });
 
+      // Update state
       setFollowingIds((prev) => new Set(prev).add(userId));
       setSuggestions((prev) => prev.filter((s) => s.suggested_user_id !== userId));
-    } catch (error) {
-      console.error('Error following user:', error);
+    } catch (err) {
+      console.error('Error following user:', err);
       toast({
         title: 'Error',
         description: 'Failed to follow user',
@@ -123,6 +125,7 @@ export function UserSuggestions() {
           </div>
         ))}
       </div>
+
       <button
         onClick={() => navigate('/explore')}
         className="text-primary hover:underline mt-4 text-sm"
@@ -131,4 +134,4 @@ export function UserSuggestions() {
       </button>
     </div>
   );
-}
+                                           }
