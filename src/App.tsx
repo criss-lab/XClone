@@ -52,6 +52,35 @@ import AdPerformanceComparison from '@/pages/AdPerformanceComparison';
 import AdminRevenueDashboard from '@/pages/AdminRevenueDashboard';
 
 export default function App() {
+
+  // Initialize AdMob and show top banner
+  useEffect(() => {
+    const initAds = async () => {
+      try {
+        await AdMob.initialize();
+
+        // Feed Top Banner
+        await AdMob.showBanner({
+          adId: "ca-app-pub-7234579833875016/8657343194",
+          adSize: BannerAdSize.BANNER,
+          position: BannerAdPosition.TOP_CENTER
+        });
+
+        // Sidebar Banner
+        await AdMob.showBanner({
+          adId: "ca-app-pub-7234579833875016/5392885600",
+          adSize: BannerAdSize.MEDIUM_RECTANGLE,
+          position: BannerAdPosition.BOTTOM_CENTER
+        });
+
+      } catch (err) {
+        console.error("AdMob init error:", err);
+      }
+    };
+
+    initAds();
+  }, []);
+
   return (
     <BrowserRouter>
       <AuthProvider>
