@@ -1,16 +1,17 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { ExternalLink, BadgeCheck } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
 import { supabase } from '@/lib/supabase';
 import { parseContent } from '@/lib/utils';
+import { AdMob, BannerAdSize, BannerAdPosition } from '@capacitor-community/admob';
 
 interface SponsoredPostCardProps {
   post: any;
 }
 
 export function SponsoredPostCard({ post }: SponsoredPostCardProps) {
+  const [bannerLoaded, setBannerLoaded] = useState(false);
+
   const handleClick = async () => {
-    // Track click
     try {
       await supabase.rpc('track_sponsored_impression', {
         content_id_param: post.id,
@@ -18,7 +19,6 @@ export function SponsoredPostCard({ post }: SponsoredPostCardProps) {
         clicked_param: true
       });
 
-      // Open target URL
       if (post.target_url) {
         window.open(post.target_url, '_blank');
       }
@@ -28,7 +28,6 @@ export function SponsoredPostCard({ post }: SponsoredPostCardProps) {
   };
 
   const handleImpression = async () => {
-    // Track impression when post appears
     try {
       await supabase.rpc('track_sponsored_impression', {
         content_id_param: post.id,
@@ -41,9 +40,36 @@ export function SponsoredPostCard({ post }: SponsoredPostCardProps) {
   };
 
   // Track impression on mount
-  React.useEffect(() => {
+  useEffect(() => {
     handleImpression();
+    loadAdMobBanner();
+    return () => {
+      removeAdMobBanner();
+    };
   }, []);
+
+  const loadAdMobBanner = async () => {
+    try {
+      await AdMob.showBanner({
+        adId: 'ca-app-pub-7234579833875016/8657343194', // Feed Top banner
+        position: BannerAdPosition.TOP_CENTER,
+        size: BannerAdSize.ADAPTIVE_BANNER,
+        isTesting: false
+      });
+      setBannerLoaded(true);
+    } catch (err) {
+      console.error('Banner Ad Error:', err);
+    }
+  };
+
+  const removeAdMobBanner = async () => {
+    try {
+      await AdMob.hideBanner();
+      setBannerLoaded(false);
+    } catch (err) {
+      console.error('Error hiding banner:', err);
+    }
+  };
 
   return (
     <div 
@@ -65,37 +91,25 @@ export function SponsoredPostCard({ post }: SponsoredPostCardProps) {
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center space-x-1 min-w-0">
-            <span className="font-bold text-foreground truncate">
-              {post.advertiser_name}
-            </span>
+            <span className="font-bold text-foreground truncate">{post.advertiser_name}</span>
             <BadgeCheck className="w-4 h-4 text-primary flex-shrink-0" fill="currentColor" />
             <span className="text-muted-foreground text-sm">·</span>
-            <span className="text-muted-foreground text-sm flex-shrink-0">
-              Sponsored
-            </span>
+            <span className="text-muted-foreground text-sm flex-shrink-0">Sponsored</span>
           </div>
 
-          {post.title && (
-            <h3 className="font-bold text-lg mt-2">{post.title}</h3>
-          )}
+          {post.title && <h3 className="font-bold text-lg mt-2">{post.title}</h3>}
 
           <div 
             className="post-content text-foreground mt-1 whitespace-pre-wrap break-words"
             dangerouslySetInnerHTML={{ __html: parseContent(post.content) }}
           />
 
-          {/* Image */}
           {post.image_url && (
             <div className="mt-3 rounded-2xl overflow-hidden">
-              <img 
-                src={post.image_url} 
-                alt={post.title} 
-                className="w-full h-full object-cover max-h-96" 
-              />
+              <img src={post.image_url} alt={post.title} className="w-full h-full object-cover max-h-96" />
             </div>
           )}
 
-          {/* Video */}
           {post.video_url && (
             <div className="mt-3 rounded-2xl overflow-hidden bg-black max-h-[600px]">
               <video
@@ -109,7 +123,6 @@ export function SponsoredPostCard({ post }: SponsoredPostCardProps) {
             </div>
           )}
 
-          {/* Call to Action */}
           {post.target_url && (
             <div className="mt-3">
               <button className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold rounded-full transition-all">
