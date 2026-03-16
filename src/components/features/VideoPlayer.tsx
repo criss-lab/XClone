@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
-import { Heart, MessageCircle, Repeat2, Share, Volume2, VolumeX, Pause, Play } from 'lucide-react';
+import { Heart, MessageCircle, Repeat2, Share, Volume2, VolumeX, Play } from 'lucide-react';
 import { Post } from '@/types';
 import { formatNumber } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
+import { AdMob } from '@capacitor-community/admob';
 
 interface VideoPlayerProps {
   post: Post;
@@ -31,8 +32,8 @@ export function VideoPlayer({ post, isActive, onUpdate }: VideoPlayerProps) {
     if (!video) return;
 
     if (isActive) {
+      showAdMobInterstitial(); // Show interstitial ad before playing
       video.play().then(() => setIsPlaying(true));
-      // Track view
       trackView();
     } else {
       video.pause();
@@ -74,10 +75,8 @@ export function VideoPlayer({ post, isActive, onUpdate }: VideoPlayerProps) {
       navigate('/auth');
       return;
     }
-
     const newIsLiked = !isLiked;
     const newCount = newIsLiked ? likesCount + 1 : Math.max(0, likesCount - 1);
-
     setIsLiked(newIsLiked);
     setLikesCount(newCount);
 
@@ -85,7 +84,6 @@ export function VideoPlayer({ post, isActive, onUpdate }: VideoPlayerProps) {
       if (newIsLiked) {
         await supabase.from('likes').insert({ user_id: user.id, post_id: post.id });
         await supabase.from('posts').update({ likes_count: newCount }).eq('id', post.id);
-
         if (post.user_id !== user.id) {
           await supabase.from('notifications').insert({
             user_id: post.user_id,
@@ -111,10 +109,8 @@ export function VideoPlayer({ post, isActive, onUpdate }: VideoPlayerProps) {
       navigate('/auth');
       return;
     }
-
     const newIsReposted = !isReposted;
     const newCount = newIsReposted ? repostsCount + 1 : Math.max(0, repostsCount - 1);
-
     setIsReposted(newIsReposted);
     setRepostsCount(newCount);
 
@@ -122,7 +118,6 @@ export function VideoPlayer({ post, isActive, onUpdate }: VideoPlayerProps) {
       if (newIsReposted) {
         await supabase.from('reposts').insert({ user_id: user.id, post_id: post.id });
         await supabase.from('posts').update({ reposts_count: newCount }).eq('id', post.id);
-
         if (post.user_id !== user.id) {
           await supabase.from('notifications').insert({
             user_id: post.user_id,
@@ -145,6 +140,19 @@ export function VideoPlayer({ post, isActive, onUpdate }: VideoPlayerProps) {
     }
   };
 
+  // AdMob Interstitial
+  const showAdMobInterstitial = async () => {
+    try {
+      await AdMob.prepareInterstitial({
+        adId: 'ca-app-pub-7234579833875016/7939157898', // real interstitial
+        isTesting: false,
+      });
+      await AdMob.showInterstitial();
+    } catch (err) {
+      console.error('Interstitial Ad Error:', err);
+    }
+  };
+
   return (
     <div className="relative h-screen w-full max-w-full bg-black snap-start snap-always overflow-hidden">
       <video
@@ -158,9 +166,7 @@ export function VideoPlayer({ post, isActive, onUpdate }: VideoPlayerProps) {
         style={{ maxWidth: '100vw' }}
       />
 
-      {/* Overlay Controls */}
       <div className="absolute inset-0 flex flex-col justify-between p-4 pointer-events-none" style={{ maxWidth: '100vw' }}>
-        {/* Top Info */}
         <div className="flex items-center justify-between text-white pointer-events-auto">
           <div className="flex items-center space-x-2">
             <div className="w-10 h-10 rounded-full bg-muted overflow-hidden">
@@ -186,7 +192,6 @@ export function VideoPlayer({ post, isActive, onUpdate }: VideoPlayerProps) {
           </button>
         </div>
 
-        {/* Center Play/Pause */}
         {!isPlaying && (
           <div className="absolute inset-0 flex items-center justify-center">
             <button
@@ -198,13 +203,11 @@ export function VideoPlayer({ post, isActive, onUpdate }: VideoPlayerProps) {
           </div>
         )}
 
-        {/* Bottom Info & Actions */}
         <div className="flex justify-between items-end text-white pointer-events-auto">
           <div className="flex-1 pr-4">
             <p className="font-semibold mb-2">{post.content}</p>
           </div>
 
-          {/* Action Buttons */}
           <div className="flex flex-col space-y-4">
             <button
               onClick={handleLike}
@@ -236,9 +239,7 @@ export function VideoPlayer({ post, isActive, onUpdate }: VideoPlayerProps) {
               <span className="text-sm font-semibold">{formatNumber(repostsCount)}</span>
             </button>
 
-            <button
-              className="flex flex-col items-center space-y-1 text-white hover:scale-110 transition-transform"
-            >
+            <button className="flex flex-col items-center space-y-1 text-white hover:scale-110 transition-transform">
               <div className="w-12 h-12 rounded-full bg-black/50 flex items-center justify-center">
                 <Share className="w-6 h-6" />
               </div>
