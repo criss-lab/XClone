@@ -1,3 +1,5 @@
+import { useEffect } from "react";
+import { AdMob, BannerAdSize, BannerAdPosition } from "@capacitor-community/admob";
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from '@/components/layout/AuthProvider';
 import { Sidebar } from '@/components/layout/Sidebar';
