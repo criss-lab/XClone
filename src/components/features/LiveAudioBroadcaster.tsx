@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Mic, Square, Loader2, Radio } from 'lucide-react';
+import { AdMob, BannerAdSize, BannerAdPosition } from '@capacitor-community/admob';
 
 interface LiveAudioBroadcasterProps {
   spaceId: string;
@@ -21,16 +22,44 @@ export function LiveAudioBroadcaster({
   const [isBroadcasting, setIsBroadcasting] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
-  
+  const [adLoaded, setAdLoaded] = useState(false);
+
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<number | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
+  // Initialize AdMob Banner
   useEffect(() => {
-    return () => {
-      stopBroadcast();
-    };
+    loadAdMobBanner();
+    return () => removeAdMobBanner();
+  }, []);
+
+  const loadAdMobBanner = async () => {
+    try {
+      await AdMob.showBanner({
+        adId: 'ca-app-pub-7234579833875016/8657343194', // Real Banner ID
+        position: BannerAdPosition.TOP_CENTER,
+        size: BannerAdSize.ADAPTIVE_BANNER,
+        isTesting: false,
+      });
+      setAdLoaded(true);
+    } catch (err) {
+      console.error('AdMob Banner Error:', err);
+    }
+  };
+
+  const removeAdMobBanner = async () => {
+    try {
+      await AdMob.hideBanner();
+      setAdLoaded(false);
+    } catch (err) {
+      console.error('Error hiding banner:', err);
+    }
+  };
+
+  useEffect(() => {
+    return () => stopBroadcast();
   }, []);
 
   const startBroadcast = async () => {
@@ -72,27 +101,17 @@ export function LiveAudioBroadcaster({
         await uploadRecording(audioBlob);
       };
 
-      // Record in 5-second chunks for better streaming experience
-      mediaRecorder.start(5000);
+      mediaRecorder.start(5000); // Record in 5-second chunks
       setIsBroadcasting(true);
       setRecordingTime(0);
-      
-      // Update space to mark as recording
-      await supabase
-        .from('spaces')
-        .update({ is_recording: true })
-        .eq('id', spaceId);
-      
-      // Start timer
+
+      await supabase.from('spaces').update({ is_recording: true }).eq('id', spaceId);
+
       timerRef.current = window.setInterval(() => {
         setRecordingTime((prev) => prev + 1);
       }, 1000);
 
-      toast({
-        title: 'Broadcasting started',
-        description: 'Your audio is now live',
-      });
-
+      toast({ title: 'Broadcasting started', description: 'Your audio is now live' });
       onBroadcastStart?.('live');
     } catch (error: any) {
       console.error('Error starting broadcast:', error);
@@ -108,23 +127,18 @@ export function LiveAudioBroadcaster({
     if (mediaRecorderRef.current && isBroadcasting) {
       mediaRecorderRef.current.stop();
       setIsBroadcasting(false);
-      
+
       if (timerRef.current) {
         clearInterval(timerRef.current);
         timerRef.current = null;
       }
 
-      // Stop all tracks
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
         streamRef.current = null;
       }
 
-      // Update space to mark as not recording
-      await supabase
-        .from('spaces')
-        .update({ is_recording: false })
-        .eq('id', spaceId);
+      await supabase.from('spaces').update({ is_recording: false }).eq('id', spaceId);
 
       onBroadcastStop?.();
     }
@@ -134,44 +148,26 @@ export function LiveAudioBroadcaster({
     setUploading(true);
     try {
       const fileName = `spaces/${spaceId}/${Date.now()}.webm`;
-      
-      const { error: uploadError } = await supabase.storage
-        .from('posts')
-        .upload(fileName, audioBlob, {
-          cacheControl: '31536000', // 1 year
-          upsert: false,
-        });
+      const { error: uploadError } = await supabase.storage.from('posts').upload(fileName, audioBlob, { cacheControl: '31536000', upsert: false });
 
       if (uploadError) throw uploadError;
 
-      const { data: { publicUrl } } = supabase.storage
-        .from('posts')
-        .getPublicUrl(fileName);
+      const { data: { publicUrl } } = supabase.storage.from('posts').getPublicUrl(fileName);
 
-      // Save recording to database
-      const { error: dbError } = await supabase
-        .from('space_recordings')
-        .insert({
-          space_id: spaceId,
-          user_id: (await supabase.auth.getUser()).data.user?.id,
-          title: `Recording ${new Date().toLocaleString()}`,
-          audio_url: publicUrl,
-          duration: recordingTime,
-        });
+      const { error: dbError } = await supabase.from('space_recordings').insert({
+        space_id: spaceId,
+        user_id: (await supabase.auth.getUser()).data.user?.id,
+        title: `Recording ${new Date().toLocaleString()}`,
+        audio_url: publicUrl,
+        duration: recordingTime,
+      });
 
       if (dbError) throw dbError;
 
-      toast({
-        title: 'Recording saved',
-        description: 'Your broadcast has been saved to the playlist',
-      });
+      toast({ title: 'Recording saved', description: 'Your broadcast has been saved' });
     } catch (error: any) {
       console.error('Error uploading recording:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to save recording',
-        variant: 'destructive',
-      });
+      toast({ title: 'Error', description: 'Failed to save recording', variant: 'destructive' });
     } finally {
       setUploading(false);
     }
@@ -181,18 +177,15 @@ export function LiveAudioBroadcaster({
     const hrs = Math.floor(seconds / 3600);
     const mins = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
-    if (hrs > 0) {
-      return `${hrs}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-    }
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+    return hrs > 0 ? `${hrs}:${mins.toString().padStart(2,'0')}:${secs.toString().padStart(2,'0')}` : `${mins}:${secs.toString().padStart(2,'0')}`;
   };
 
-  if (!isHost) {
-    return null;
-  }
+  if (!isHost) return null;
 
   return (
     <div className="border border-border rounded-lg p-4 bg-background space-y-4">
+      {adLoaded && <div className="mb-2 text-center text-sm text-muted-foreground">AdMob Banner Loaded</div>}
+
       <div className="flex items-center justify-between">
         <p className="text-sm font-semibold flex items-center">
           <Radio className="w-4 h-4 mr-2" />
@@ -207,25 +200,14 @@ export function LiveAudioBroadcaster({
       </div>
 
       {!isBroadcasting && !uploading && (
-        <Button
-          onClick={startBroadcast}
-          className="w-full"
-          size="lg"
-        >
-          <Mic className="w-4 h-4 mr-2" />
-          Start Broadcasting
+        <Button onClick={startBroadcast} className="w-full" size="lg">
+          <Mic className="w-4 h-4 mr-2" /> Start Broadcasting
         </Button>
       )}
 
       {isBroadcasting && (
-        <Button
-          onClick={stopBroadcast}
-          variant="destructive"
-          className="w-full"
-          size="lg"
-        >
-          <Square className="w-4 h-4 mr-2" />
-          Stop Broadcast
+        <Button onClick={stopBroadcast} variant="destructive" className="w-full" size="lg">
+          <Square className="w-4 h-4 mr-2" /> Stop Broadcast
         </Button>
       )}
 
