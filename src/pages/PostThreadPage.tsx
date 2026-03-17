@@ -29,6 +29,7 @@ export default function PostThreadPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+
   const [post, setPost] = useState<Post | null>(null);
   const [replies, setReplies] = useState<Reply[]>([]);
   const [loading, setLoading] = useState(true);
@@ -36,80 +37,59 @@ export default function PostThreadPage() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (postId) {
-      fetchPostAndReplies();
-    }
+    if (postId) fetchPostAndReplies();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [postId]);
 
+  // Fetch post & replies
   const fetchPostAndReplies = async () => {
     if (!postId) return;
-
+    setLoading(true);
     try {
-      // Fetch main post
       const { data: postData, error: postError } = await supabase
         .from('posts')
-        .select(`
-          *,
-          user_profiles (*)
-        `)
+        .select('*, user_profiles (*)')
         .eq('id', postId)
         .single();
-
       if (postError) throw postError;
       setPost(postData);
 
-      // Fetch replies
       const { data: repliesData, error: repliesError } = await supabase
         .from('replies')
-        .select(`
-          *,
-          user_profiles (*)
-        `)
+        .select('*, user_profiles (*)')
         .eq('post_id', postId)
         .order('created_at', { ascending: true });
-
       if (repliesError) throw repliesError;
+
       setReplies(repliesData || []);
-    } catch (error) {
-      console.error('Error fetching thread:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to load post',
-        variant: 'destructive',
-      });
+    } catch (err) {
+      console.error('Error fetching post thread:', err);
+      toast({ title: 'Error', description: 'Failed to load post', variant: 'destructive' });
     } finally {
       setLoading(false);
     }
   };
 
   const handleReply = async () => {
-    if (!user) {
-      navigate('/auth');
-      return;
-    }
-
+    if (!user) return navigate('/auth');
     if (!replyContent.trim() || !postId) return;
 
     setSubmitting(true);
-
     try {
-      const { error } = await supabase.from('replies').insert({
+      // Insert reply
+      const { error: insertError } = await supabase.from('replies').insert({
         post_id: postId,
         user_id: user.id,
         content: replyContent.trim(),
       });
+      if (insertError) throw insertError;
 
-      if (error) throw error;
-
-      // Update replies count
+      // Update post replies_count
       if (post) {
-        await supabase
-          .from('posts')
-          .update({ replies_count: post.replies_count + 1 })
-          .eq('id', postId);
+        await supabase.from('posts').update({ replies_count: post.replies_count + 1 }).eq('id', postId);
       }
 
-      // Create notification
+      // Notify post owner
       if (post && post.user_id !== user.id) {
         await supabase.from('notifications').insert({
           user_id: post.user_id,
@@ -122,13 +102,9 @@ export default function PostThreadPage() {
       setReplyContent('');
       toast({ title: 'Reply posted successfully' });
       fetchPostAndReplies();
-    } catch (error: any) {
-      console.error('Reply error:', error);
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to post reply',
-        variant: 'destructive',
-      });
+    } catch (err: any) {
+      console.error('Reply error:', err);
+      toast({ title: 'Error', description: err.message || 'Failed to post reply', variant: 'destructive' });
     } finally {
       setSubmitting(false);
     }
@@ -146,8 +122,8 @@ export default function PostThreadPage() {
     return (
       <div className="min-h-screen bg-background">
         <TopBar title="Post" showBack />
-        <div className="text-center py-12">
-          <p className="text-muted-foreground">Post not found</p>
+        <div className="text-center py-12 text-muted-foreground">
+          <p>Post not found</p>
         </div>
       </div>
     );
@@ -157,10 +133,10 @@ export default function PostThreadPage() {
     <div className="min-h-screen bg-background pb-16 md:pb-0">
       <TopBar title="Post" showBack />
 
-      {/* Main Post */}
+      {/* Main post */}
       <PostCard post={post} onUpdate={fetchPostAndReplies} />
 
-      {/* Reply Composer */}
+      {/* Reply composer */}
       {user && (
         <div className="border-b border-border p-4">
           <div className="flex space-x-3">
@@ -183,11 +159,7 @@ export default function PostThreadPage() {
               />
               <div className="flex items-center justify-between mt-3">
                 {replyContent.length > 0 && (
-                  <span
-                    className={`text-sm ${
-                      replyContent.length > 260 ? 'text-destructive' : 'text-muted-foreground'
-                    }`}
-                  >
+                  <span className={`text-sm ${replyContent.length > 260 ? 'text-destructive' : 'text-muted-foreground'}`}>
                     {replyContent.length}/280
                   </span>
                 )}
@@ -204,7 +176,7 @@ export default function PostThreadPage() {
         </div>
       )}
 
-      {/* Replies */}
+      {/* Replies list */}
       <div>
         {replies.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground">
@@ -220,11 +192,7 @@ export default function PostThreadPage() {
                   onClick={() => navigate(`/profile/${reply.user_profiles.username}`)}
                 >
                   {reply.user_profiles.avatar_url ? (
-                    <img
-                      src={reply.user_profiles.avatar_url}
-                      alt={reply.user_profiles.username}
-                      className="w-full h-full object-cover"
-                    />
+                    <img src={reply.user_profiles.avatar_url} alt={reply.user_profiles.username} className="w-full h-full object-cover" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-sm font-semibold">
                       {reply.user_profiles.username[0]?.toUpperCase()}
