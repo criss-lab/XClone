@@ -36,9 +36,11 @@ export default function ThreadsPage() {
 
   useEffect(() => {
     fetchThreads();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
   const fetchThreads = async () => {
+    setLoading(true);
     try {
       let query = supabase
         .from('threads')
@@ -54,7 +56,6 @@ export default function ThreadsPage() {
         .eq('is_published', true);
 
       if (activeTab === 'Following' && user) {
-        // Get followed user IDs
         const { data: follows } = await supabase
           .from('follows')
           .select('following_id')
@@ -70,15 +71,11 @@ export default function ThreadsPage() {
         }
       }
 
-      if (activeTab === 'Trending') {
-        query = query.order('views_count', { ascending: false });
-      } else {
-        query = query.order('created_at', { ascending: false });
-      }
+      query = query.order(activeTab === 'Trending' ? 'views_count' : 'created_at', { ascending: false });
 
       const { data, error } = await query.limit(50);
-
       if (error) throw error;
+
       setThreads(data || []);
     } catch (error) {
       console.error('Error fetching threads:', error);
@@ -91,6 +88,7 @@ export default function ThreadsPage() {
     <div className="min-h-screen bg-background pb-16 md:pb-0">
       <TopBar title="Threads" />
 
+      {/* Tabs */}
       <div className="sticky top-14 z-30 bg-background border-b border-border">
         <div className="flex overflow-x-auto scrollbar-hide">
           {tabs.map((tab) => (
@@ -109,6 +107,7 @@ export default function ThreadsPage() {
         </div>
       </div>
 
+      {/* Create Thread */}
       {user && (
         <div className="p-4 border-b border-border">
           <Button
@@ -121,6 +120,7 @@ export default function ThreadsPage() {
         </div>
       )}
 
+      {/* Loading */}
       {loading ? (
         <div className="flex items-center justify-center py-12">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -143,8 +143,9 @@ export default function ThreadsPage() {
               onClick={() => navigate(`/thread/${thread.id}`)}
             >
               <div className="flex items-start space-x-3">
+                {/* Avatar */}
                 <div
-                  className="w-10 h-10 rounded-full bg-muted overflow-hidden flex-shrink-0"
+                  className="w-10 h-10 rounded-full bg-muted overflow-hidden flex-shrink-0 cursor-pointer"
                   onClick={(e) => {
                     e.stopPropagation();
                     navigate(`/profile/${thread.user_profiles.username}`);
@@ -163,11 +164,10 @@ export default function ThreadsPage() {
                   )}
                 </div>
 
+                {/* Thread Content */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center space-x-2">
-                    <span className="font-bold truncate">
-                      {thread.user_profiles.username}
-                    </span>
+                    <span className="font-bold truncate">{thread.user_profiles.username}</span>
                     {thread.user_profiles.verified && (
                       <BadgeCheck className="w-4 h-4 text-primary flex-shrink-0" fill="currentColor" />
                     )}
@@ -191,6 +191,7 @@ export default function ThreadsPage() {
                     />
                   )}
 
+                  {/* Stats */}
                   <div className="flex items-center space-x-6 text-muted-foreground">
                     <div className="flex items-center space-x-2">
                       <Heart className="w-4 h-4" />
