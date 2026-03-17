@@ -19,11 +19,13 @@ const PAGE_SIZE = 10;
 
 type FeedItem = 
   | { type: 'post'; data: Post }
-  | { type: 'thread'; data: any };
+  | { type: 'thread'; data: any }
+  | { type: 'sponsored'; data: any };
 
 export default function HomePage() {
   const { user } = useAuth();
   const navigate = useNavigate();
+
   const [feedItems, setFeedItems] = useState<FeedItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'foryou' | 'following'>('foryou');
@@ -32,21 +34,24 @@ export default function HomePage() {
   const [showVideoAd, setShowVideoAd] = useState(false);
   const [videoAdShown, setVideoAdShown] = useState(false);
 
+  // --- Initial fetch ---
   useEffect(() => {
     fetchInitialFeed();
     fetchSponsoredContent();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, user]);
 
+  // --- Show video ad occasionally ---
   useEffect(() => {
     if (!videoAdShown && feedItems.length > 0 && activeTab === 'foryou') {
-      const shouldShowAd = Math.random() < 0.3;
-      if (shouldShowAd) {
+      if (Math.random() < 0.3) {
         setShowVideoAd(true);
         setVideoAdShown(true);
       }
     }
   }, [feedItems, videoAdShown, activeTab]);
 
+  // --- Fetch sponsored content ---
   const fetchSponsoredContent = async () => {
     try {
       const { data, error } = await supabase.rpc('get_sponsored_posts', {
@@ -54,14 +59,13 @@ export default function HomePage() {
         limit_param: 3
       });
 
-      if (!error && data) {
-        setSponsoredPosts(data);
-      }
-    } catch (error) {
-      console.error('Error fetching sponsored content:', error);
+      if (!error && data) setSponsoredPosts(data);
+    } catch (err) {
+      console.error('Error fetching sponsored content:', err);
     }
   };
 
+  // --- Fetch initial feed ---
   const fetchInitialFeed = async () => {
     setLoading(true);
     setFeedItems([]);
@@ -71,28 +75,21 @@ export default function HomePage() {
     setLoading(false);
   };
 
+  // --- Fetch feed page ---
   const fetchFeed = async (pageNum: number): Promise<FeedItem[]> => {
     try {
       const items: FeedItem[] = [];
-      
-      // Fetch posts
+
       let postsQuery = supabase
         .from('posts')
-        .select(`
-          *,
-          user_profiles (*)
-        `)
+        .select('*, user_profiles (*)')
         .is('community_id', null)
         .order('created_at', { ascending: false })
         .limit(PAGE_SIZE);
 
-      // Fetch threads
       let threadsQuery = supabase
         .from('threads')
-        .select(`
-          *,
-          user_profiles (*)
-        `)
+        .select('*, user_profiles (*)')
         .eq('is_published', true)
         .order('created_at', { ascending: false })
         .limit(PAGE_SIZE);
@@ -103,62 +100,52 @@ export default function HomePage() {
           .select('following_id')
           .eq('follower_id', user.id);
 
-        const followingIds = followingData?.map((f) => f.following_id) || [];
-        
-        if (followingIds.length === 0) {
-          return [];
-        }
+        const followingIds = followingData?.map(f => f.following_id) || [];
+        if (followingIds.length === 0) return [];
 
         postsQuery = postsQuery.in('user_id', followingIds);
         threadsQuery = threadsQuery.in('user_id', followingIds);
       }
 
-      const [postsResult, threadsResult] = await Promise.all([
-        postsQuery,
-        threadsQuery
-      ]);
+      const [postsResult, threadsResult] = await Promise.all([postsQuery, threadsQuery]);
 
-      // Combine and sort by created_at
       const posts = (postsResult.data || []).map(p => ({ type: 'post' as const, data: p, created_at: p.created_at }));
       const threads = (threadsResult.data || []).map(t => ({ type: 'thread' as const, data: t, created_at: t.created_at }));
-      
-      const combined = [...posts, ...threads]
-        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-        .slice(pageNum * PAGE_SIZE, (pageNum + 1) * PAGE_SIZE);
 
-      // Insert sponsored posts organically (every 5-7 items)
-      const withSponsored: any[] = [];
+      let combined = [...posts, ...threads].sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+
+      combined = combined.slice(pageNum * PAGE_SIZE, (pageNum + 1) * PAGE_SIZE);
+
+      // Insert sponsored posts every 5-7 items
+      const withSponsored: FeedItem[] = [];
       let sponsoredIndex = 0;
-      
       for (let i = 0; i < combined.length; i++) {
         withSponsored.push(combined[i]);
-        
         if ((i + 1) % (5 + Math.floor(Math.random() * 3)) === 0 && sponsoredIndex < sponsoredPosts.length) {
-          withSponsored.push({
-            type: 'sponsored',
-            data: sponsoredPosts[sponsoredIndex]
-          });
+          withSponsored.push({ type: 'sponsored', data: sponsoredPosts[sponsoredIndex] });
           sponsoredIndex++;
         }
       }
 
-      return withSponsored.map(({ type, data }) => ({ type, data }));
-    } catch (error) {
-      console.error('Error fetching feed:', error);
+      return withSponsored;
+    } catch (err) {
+      console.error('Error fetching feed:', err);
       return [];
     }
   };
 
+  // --- Infinite scroll ---
   const loadMoreFeed = async (): Promise<boolean> => {
     const nextPage = page + 1;
     const newItems = await fetchFeed(nextPage);
-    
+
     if (newItems.length > 0) {
-      setFeedItems((prev) => [...prev, ...newItems]);
+      setFeedItems(prev => [...prev, ...newItems]);
       setPage(nextPage);
       return newItems.length === PAGE_SIZE;
     }
-    
     return false;
   };
 
@@ -166,26 +153,26 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-background pb-16 lg:pb-0">
+      {/* Video Ad */}
       {showVideoAd && (
         <VideoAdPlayer
           videoUrl=""
           onAdComplete={() => setShowVideoAd(false)}
           onSkip={() => setShowVideoAd(false)}
-          allowSkip={true}
+          allowSkip
           skipAfter={5}
         />
       )}
-      
+
       <TopBar title="Home" />
 
+      {/* Tabs */}
       <div className="sticky top-14 z-30 bg-background/95 backdrop-blur-sm border-b border-border">
         <div className="flex">
           <button
             onClick={() => setActiveTab('foryou')}
             className={`flex-1 py-4 font-semibold transition-colors border-b-2 ${
-              activeTab === 'foryou'
-                ? 'border-primary text-foreground'
-                : 'border-transparent text-muted-foreground hover:bg-muted/50'
+              activeTab === 'foryou' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:bg-muted/50'
             }`}
           >
             <div className="flex items-center justify-center space-x-2">
@@ -196,9 +183,7 @@ export default function HomePage() {
           <button
             onClick={() => setActiveTab('following')}
             className={`flex-1 py-4 font-semibold transition-colors border-b-2 ${
-              activeTab === 'following'
-                ? 'border-primary text-foreground'
-                : 'border-transparent text-muted-foreground hover:bg-muted/50'
+              activeTab === 'following' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:bg-muted/50'
             }`}
           >
             Following
@@ -208,9 +193,10 @@ export default function HomePage() {
 
       <ComposePost onSuccess={fetchInitialFeed} />
 
-      {/* Top Ad Placement */}
+      {/* Top feed ad */}
       <DynamicAd location="feed_top" className="border-b border-border p-4" />
 
+      {/* Feed */}
       <div>
         {loading ? (
           <div className="flex items-center justify-center py-12">
@@ -229,10 +215,7 @@ export default function HomePage() {
           <>
             {feedItems.map((item, index) => (
               <div key={`${item.type}-${item.data.id}`}>
-                <div 
-                  ref={index === feedItems.length - 1 ? lastElementRef : null}
-                  className="animate-slide-in"
-                >
+                <div ref={index === feedItems.length - 1 ? lastElementRef : null} className="animate-slide-in">
                   {item.type === 'post' ? (
                     <PostCard post={item.data} onUpdate={fetchInitialFeed} />
                   ) : item.type === 'sponsored' ? (
@@ -241,10 +224,9 @@ export default function HomePage() {
                     <ThreadCard thread={item.data} />
                   )}
                 </div>
-                {/* Inline Ad every 5 posts */}
-                {(index + 1) % 5 === 0 && (
-                  <DynamicAd location="feed_inline" className="border-b border-border p-4" />
-                )}
+
+                {/* Inline ad every 5 posts */}
+                {(index + 1) % 5 === 0 && <DynamicAd location="feed_inline" className="border-b border-border p-4" />}
               </div>
             ))}
             {loadingMore && (
@@ -256,6 +238,7 @@ export default function HomePage() {
         )}
       </div>
 
+      {/* Sidebar suggestions */}
       <div className="hidden lg:block fixed right-8 top-20 w-80">
         <UserSuggestions />
       </div>
@@ -263,14 +246,13 @@ export default function HomePage() {
   );
 }
 
+// --- Thread Card ---
 function ThreadCard({ thread }: { thread: any }) {
   const navigate = useNavigate();
   const [coverImage, setCoverImage] = useState('');
 
   useEffect(() => {
-    if (thread.cover_image) {
-      setCoverImage(thread.cover_image);
-    }
+    if (thread.cover_image) setCoverImage(thread.cover_image);
   }, [thread.cover_image]);
 
   return (
@@ -281,11 +263,7 @@ function ThreadCard({ thread }: { thread: any }) {
       <div className="flex gap-3">
         <div className="w-12 h-12 rounded-full bg-muted overflow-hidden flex-shrink-0">
           {thread.user_profiles?.avatar_url ? (
-            <img
-              src={thread.user_profiles.avatar_url}
-              alt={thread.user_profiles.username}
-              className="w-full h-full object-cover"
-            />
+            <img src={thread.user_profiles.avatar_url} alt={thread.user_profiles.username} className="w-full h-full object-cover" />
           ) : (
             <div className="w-full h-full flex items-center justify-center font-bold">
               {thread.user_profiles?.username?.[0]?.toUpperCase()}
@@ -295,13 +273,9 @@ function ThreadCard({ thread }: { thread: any }) {
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-2">
-            <span className="font-semibold hover:underline">
-              {thread.user_profiles?.username}
-            </span>
+            <span className="font-semibold hover:underline">{thread.user_profiles?.username}</span>
             <span className="text-muted-foreground">·</span>
-            <span className="text-sm text-muted-foreground">
-              {formatDistanceToNow(new Date(thread.created_at), { addSuffix: true })}
-            </span>
+            <span className="text-sm text-muted-foreground">{formatDistanceToNow(new Date(thread.created_at), { addSuffix: true })}</span>
           </div>
 
           <div className="mb-3">
@@ -314,12 +288,7 @@ function ThreadCard({ thread }: { thread: any }) {
 
           {coverImage && (
             <div className="mb-3 rounded-xl overflow-hidden border border-border">
-              <img
-                src={coverImage}
-                alt={thread.title}
-                className="w-full max-h-60 object-cover"
-                loading="lazy"
-              />
+              <img src={coverImage} alt={thread.title} className="w-full max-h-60 object-cover" loading="lazy" />
             </div>
           )}
 
