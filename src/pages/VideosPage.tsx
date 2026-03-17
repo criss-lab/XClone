@@ -3,6 +3,7 @@ import { VideoPlayer } from '@/components/features/VideoPlayer';
 import { supabase } from '@/lib/supabase';
 import { Post } from '@/types';
 import { Loader2 } from 'lucide-react';
+import { AdMob } from '@capacitor-community/admob';
 
 export default function VideosPage() {
   const [videos, setVideos] = useState<Post[]>([]);
@@ -10,8 +11,11 @@ export default function VideosPage() {
   const [activeIndex, setActiveIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  const AD_FREQUENCY = 4; // 🔥 best balance
+
   useEffect(() => {
     fetchVideos();
+    initAds();
   }, []);
 
   useEffect(() => {
@@ -22,15 +26,79 @@ export default function VideosPage() {
       const scrollPosition = container.scrollTop;
       const videoHeight = window.innerHeight;
       const newIndex = Math.round(scrollPosition / videoHeight);
-      
+
       if (newIndex !== activeIndex && newIndex < videos.length) {
         setActiveIndex(newIndex);
+
+        // 🔥 SHOW INTERSTITIAL EVERY 4 VIDEOS
+        if (newIndex > 0 && newIndex % AD_FREQUENCY === 0) {
+          showInterstitial();
+        }
       }
     };
 
     container.addEventListener('scroll', handleScroll);
     return () => container.removeEventListener('scroll', handleScroll);
   }, [activeIndex, videos.length]);
+
+  // ✅ INIT ADS
+  const initAds = async () => {
+    try {
+      await AdMob.initialize({
+        requestTrackingAuthorization: false,
+        testingDevices: [],
+        initializeForTesting: false,
+      });
+
+      await preloadInterstitial();
+      await preloadRewarded();
+
+    } catch (err) {
+      console.error("Ad init error:", err);
+    }
+  };
+
+  // 🔥 INTERSTITIAL PRELOAD
+  const preloadInterstitial = async () => {
+    try {
+      await AdMob.prepareInterstitial({
+        adId: "ca-app-pub-7234579833875016/7939157898",
+      });
+    } catch (err) {
+      console.error("Interstitial preload error:", err);
+    }
+  };
+
+  // 🔥 INTERSTITIAL SHOW
+  const showInterstitial = async () => {
+    try {
+      await AdMob.showInterstitial();
+      await preloadInterstitial(); // reload next
+    } catch (err) {
+      console.error("Interstitial show error:", err);
+    }
+  };
+
+  // 🎁 REWARDED PRELOAD
+  const preloadRewarded = async () => {
+    try {
+      await AdMob.prepareRewardVideoAd({
+        adId: "ca-app-pub-7234579833875016/2575150572",
+      });
+    } catch (err) {
+      console.error("Rewarded preload error:", err);
+    }
+  };
+
+  // 🎁 REWARDED SHOW (you can trigger this anywhere later)
+  const showRewarded = async () => {
+    try {
+      await AdMob.showRewardVideoAd();
+      await preloadRewarded();
+    } catch (err) {
+      console.error("Rewarded show error:", err);
+    }
+  };
 
   const fetchVideos = async () => {
     try {
