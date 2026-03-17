@@ -2,6 +2,8 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ------------------------- */
+/* Base variables and dark mode */
 @layer base {
   :root {
     --background: 0 0% 100%;
@@ -47,74 +49,68 @@
     --input: 0 0% 14.9%;
     --ring: 142 76% 36%;
   }
-}
 
-@layer base {
-  * {
-    @apply border-border;
-  }
-  
   body {
     @apply bg-background text-foreground transition-colors duration-200;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
-  
+
   /* Ensure theme transitions work properly */
   :root,
   :root.dark {
     color-scheme: light;
   }
-  
   :root.dark {
     color-scheme: dark;
   }
 }
 
-/* Custom scrollbar */
+/* ------------------------- */
+/* Utilities for custom classes */
+@layer utilities {
+  .border-border { border-color: hsl(var(--border)); }
+  .bg-background { background-color: hsl(var(--background)); }
+  .text-foreground { color: hsl(var(--foreground)); }
+  .text-muted-foreground { color: hsl(var(--muted-foreground)); }
+  .bg-muted { background-color: hsl(var(--muted)); }
+  .bg-primary { background-color: hsl(var(--primary)); }
+}
+
+/* ------------------------- */
+/* Scrollbars */
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
-
 .scrollbar-hide {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
-
-/* Custom scrollbar for desktop */
 ::-webkit-scrollbar {
   width: 8px;
 }
-
 ::-webkit-scrollbar-track {
   background: transparent;
 }
-
 ::-webkit-scrollbar-thumb {
   background: hsl(var(--muted));
   border-radius: 4px;
 }
-
 ::-webkit-scrollbar-thumb:hover {
   background: hsl(var(--muted-foreground) / 0.5);
 }
 
+/* ------------------------- */
 /* Smooth scroll */
 html {
   scroll-behavior: smooth;
 }
 
+/* ------------------------- */
 /* Animations */
 @keyframes slideIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
-
 .animate-slide-in {
   animation: slideIn 0.3s ease-out;
 }
@@ -124,29 +120,21 @@ html {
   @apply text-primary hover:underline;
 }
 
-/* Prevent horizontal overflow on all screens */
+/* Prevent horizontal overflow */
 * {
   max-width: 100%;
   word-wrap: break-word;
   overflow-wrap: break-word;
 }
-
-html,
-body {
+html, body {
   overflow-x: hidden;
   width: 100%;
 }
-
-img,
-video,
-iframe,
-svg {
+img, video, iframe, svg {
   max-width: 100%;
   height: auto;
 }
-
-pre,
-code {
+pre, code {
   white-space: pre-wrap;
   word-break: break-all;
 }
@@ -159,27 +147,7 @@ code {
   padding-left: 1rem;
   padding-right: 1rem;
 }
-
-@media (min-width: 640px) {
-  .container {
-    max-width: 640px;
-  }
-}
-
-@media (min-width: 768px) {
-  .container {
-    max-width: 768px;
-  }
-}
-
-@media (min-width: 1024px) {
-  .container {
-    max-width: 1024px;
-  }
-}
-
-@media (min-width: 1280px) {
-  .container {
-    max-width: 1280px;
-  }
-}
+@media (min-width: 640px) { .container { max-width: 640px; } }
+@media (min-width: 768px) { .container { max-width: 768px; } }
+@media (min-width: 1024px) { .container { max-width: 1024px; } }
+@media (min-width: 1280px) { .container { max-width: 1280px; } }
