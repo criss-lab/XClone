@@ -28,6 +28,13 @@ interface StreamMessage {
   };
 }
 
+// Simple Ad Component (can be replaced with real ad code)
+const ChatAd = () => (
+  <div className="p-3 bg-yellow-100 text-black rounded-md text-center font-semibold border border-yellow-300">
+    🔥 Sponsored Ad - Check this out!
+  </div>
+);
+
 export default function LiveStreamPage() {
   const { streamId } = useParams();
   const { user } = useAuth();
@@ -70,10 +77,7 @@ export default function LiveStreamPage() {
     try {
       const { data, error } = await supabase
         .from('live_streams')
-        .select(`
-          *,
-          user:user_profiles(*)
-        `)
+        .select(`*, user:user_profiles(*)`)
         .eq('id', streamId)
         .single();
 
@@ -115,10 +119,7 @@ export default function LiveStreamPage() {
     try {
       const { data } = await supabase
         .from('stream_chat')
-        .select(`
-          *,
-          user_profiles(username, avatar_url)
-        `)
+        .select(`*, user_profiles(username, avatar_url)`)
         .eq('stream_id', streamId)
         .order('created_at', { ascending: true })
         .limit(100);
@@ -137,7 +138,6 @@ export default function LiveStreamPage() {
       navigate('/auth');
       return;
     }
-
     if (!newMessage.trim()) return;
 
     try {
@@ -146,7 +146,6 @@ export default function LiveStreamPage() {
         user_id: user.id,
         message: newMessage.trim()
       });
-
       setNewMessage('');
       fetchMessages();
     } catch (error: any) {
@@ -269,32 +268,37 @@ export default function LiveStreamPage() {
                 <p className="text-xs">Be the first to comment!</p>
               </div>
             ) : (
-              messages.map((msg) => (
-                <div key={msg.id} className="flex items-start space-x-2">
-                  <div className="w-8 h-8 rounded-full bg-muted overflow-hidden flex-shrink-0">
-                    {msg.user_profiles?.avatar_url ? (
-                      <img
-                        src={msg.user_profiles.avatar_url}
-                        alt={msg.user_profiles.username}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-xs font-bold">
-                        {msg.user_profiles?.username[0]?.toUpperCase()}
-                      </div>
-                    )}
+              messages.map((msg, idx) => (
+                <div key={msg.id}>
+                  {/* Original chat message */}
+                  <div className="flex items-start space-x-2">
+                    <div className="w-8 h-8 rounded-full bg-muted overflow-hidden flex-shrink-0">
+                      {msg.user_profiles?.avatar_url ? (
+                        <img
+                          src={msg.user_profiles.avatar_url}
+                          alt={msg.user_profiles.username}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-xs font-bold">
+                          {msg.user_profiles?.username[0]?.toUpperCase()}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm">
+                        <span className="font-semibold text-primary">
+                          {msg.user_profiles?.username}
+                        </span>{' '}
+                        <span className="text-foreground break-words">
+                          {msg.message}
+                        </span>
+                      </p>
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm">
-                      <span className="font-semibold text-primary">
-                        {msg.user_profiles?.username}
-                      </span>
-                      {' '}
-                      <span className="text-foreground break-words">
-                        {msg.message}
-                      </span>
-                    </p>
-                  </div>
+
+                  {/* Insert an ad every 5 messages */}
+                  { (idx + 1) % 5 === 0 && <ChatAd /> }
                 </div>
               ))
             )}

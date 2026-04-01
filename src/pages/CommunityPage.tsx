@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Loader2, Users, TrendingUp } from 'lucide-react';
 import { Post } from '@/types';
 import { formatNumber } from '@/lib/utils';
+import { AdMob, BannerAdSize, BannerAdPosition } from '@capacitor-community/admob';
 
 interface Community {
   id: string;
@@ -34,16 +35,25 @@ export default function CommunityPage() {
   const [isMember, setIsMember] = useState(false);
 
   useEffect(() => {
-    if (name) {
-      fetchCommunity();
-    }
+    if (name) fetchCommunity();
   }, [name]);
 
   useEffect(() => {
-    if (community) {
-      fetchPosts();
-    }
+    if (community) fetchPosts();
   }, [community, isMember]);
+
+  useEffect(() => {
+    // Show bottom banner ad
+    AdMob.showBanner({
+      adId: "ca-app-pub-7234579833875016/8657343194", // Banner ID
+      adSize: BannerAdSize.BANNER,
+      position: BannerAdPosition.BOTTOM_CENTER,
+    });
+
+    return () => {
+      AdMob.hideBanner();
+    };
+  }, []);
 
   const fetchCommunity = async () => {
     if (!name) return;
@@ -58,7 +68,6 @@ export default function CommunityPage() {
       if (error) throw error;
       setCommunity(data);
 
-      // Check if user is a member
       if (user) {
         const { data: memberData } = await supabase
           .from('community_members')
@@ -83,35 +92,19 @@ export default function CommunityPage() {
   };
 
   const fetchPosts = async () => {
-    if (!name) return;
+    if (!community || !isMember) {
+      setPosts([]);
+      return;
+    }
 
     try {
-      const { data: communityData } = await supabase
-        .from('communities')
-        .select('id')
-        .eq('name', name)
-        .single();
-
-      if (!communityData) return;
-
-      // Only fetch posts if user is a member
-      if (!isMember) {
-        setPosts([]);
-        return;
-      }
-
       const { data } = await supabase
         .from('posts')
-        .select(`
-          *,
-          user_profiles (*)
-        `)
-        .eq('community_id', communityData.id)
+        .select(`*, user_profiles (*)`)
+        .eq('community_id', community.id)
         .order('created_at', { ascending: false });
 
-      if (data) {
-        setPosts(data);
-      }
+      if (data) setPosts(data);
     } catch (error) {
       console.error('Error fetching posts:', error);
     }
@@ -122,7 +115,6 @@ export default function CommunityPage() {
       navigate('/auth');
       return;
     }
-
     if (!community) return;
 
     try {
@@ -138,10 +130,7 @@ export default function CommunityPage() {
       } else {
         const { error } = await supabase
           .from('community_members')
-          .insert({
-            community_id: community.id,
-            user_id: user.id,
-          });
+          .insert({ community_id: community.id, user_id: user.id });
 
         if (error) throw error;
         setIsMember(true);
@@ -165,12 +154,10 @@ export default function CommunityPage() {
     );
   }
 
-  if (!community) {
-    return null;
-  }
+  if (!community) return null;
 
   return (
-    <div className="min-h-screen bg-background pb-16 md:pb-0">
+    <div className="min-h-screen bg-background pb-20 md:pb-20"> {/* extra padding for banner */}
       <TopBar title={`c/${community.name}`} showBack />
 
       {/* Community Header */}
@@ -243,9 +230,7 @@ export default function CommunityPage() {
             {posts.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground">
                 <p className="text-lg font-semibold mb-2">No posts yet</p>
-                <p className="text-sm">
-                  Be the first to post in this community!
-                </p>
+                <p className="text-sm">Be the first to post in this community!</p>
               </div>
             ) : (
               posts.map((post) => <PostCard key={post.id} post={post} onUpdate={fetchPosts} />)

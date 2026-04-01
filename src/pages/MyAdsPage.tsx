@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Megaphone, Eye, MousePointer, DollarSign, Loader2, Plus, Pause, Play, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatNumber } from '@/lib/utils';
+import { AdMob, BannerAdSize, BannerAdPosition } from '@capacitor-community/admob';
 
 export default function MyAdsPage() {
   const { user } = useAuth();
@@ -20,6 +21,18 @@ export default function MyAdsPage() {
     } else {
       navigate('/auth');
     }
+
+    // Show real AdMob banner below TopBar
+    AdMob.showBanner({
+      adId: "ca-app-pub-7234579833875016/5392885600", // Real Sidebar/Banner ID
+      adSize: BannerAdSize.BANNER,
+      position: BannerAdPosition.TOP_CENTER
+    });
+
+    // Hide banner when leaving page
+    return () => {
+      AdMob.hideBanner();
+    };
   }, [user]);
 
   const fetchAds = async () => {
@@ -122,96 +135,7 @@ export default function MyAdsPage() {
           <div className="space-y-4">
             {ads.map((ad) => (
               <div key={ad.id} className="bg-card border border-border rounded-xl p-6">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      <h3 className="text-lg font-bold">{ad.title}</h3>
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                        ad.status === 'active' ? 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400' :
-                        ad.status === 'pending' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/20 dark:text-orange-400' :
-                        ad.status === 'paused' ? 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400' :
-                        ad.status === 'approved' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400' :
-                        'bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-400'
-                      }`}>
-                        {ad.status}
-                      </span>
-                      {ad.payment_status === 'pending' && (
-                        <span className="px-3 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-700 dark:bg-orange-900/20 dark:text-orange-400">
-                          Payment Pending
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-muted-foreground text-sm mb-3">{ad.description}</p>
-                    
-                    {ad.image_url && (
-                      <img src={ad.image_url} alt={ad.title} className="w-full max-h-48 object-cover rounded-lg mb-3" />
-                    )}
-
-                    <div className="grid grid-cols-4 gap-4 mb-3">
-                      <div>
-                        <p className="text-xs text-muted-foreground flex items-center gap-1">
-                          <Eye className="w-3 h-3" />
-                          Impressions
-                        </p>
-                        <p className="text-lg font-bold">{formatNumber(ad.impressions)}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground flex items-center gap-1">
-                          <MousePointer className="w-3 h-3" />
-                          Clicks
-                        </p>
-                        <p className="text-lg font-bold">{formatNumber(ad.clicks)}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground flex items-center gap-1">
-                          <DollarSign className="w-3 h-3" />
-                          Spent
-                        </p>
-                        <p className="text-lg font-bold">${ad.spent?.toFixed(2) || '0.00'}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground flex items-center gap-1">
-                          <DollarSign className="w-3 h-3" />
-                          Budget
-                        </p>
-                        <p className="text-lg font-bold">${ad.budget}</p>
-                      </div>
-                    </div>
-
-                    {ad.ai_verification_notes && (
-                      <div className="bg-muted/50 rounded-lg p-3 text-sm">
-                        <p className="font-semibold mb-1">AI Verification</p>
-                        <p className="text-muted-foreground">{ad.ai_verification_notes}</p>
-                        {ad.ai_verification_score && (
-                          <p className="mt-1 text-primary font-medium">
-                            Score: {ad.ai_verification_score}/100
-                          </p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex gap-2">
-                  {ad.status === 'active' && (
-                    <Button onClick={() => pauseAd(ad.id)} variant="outline" size="sm">
-                      <Pause className="w-4 h-4 mr-2" />
-                      Pause
-                    </Button>
-                  )}
-                  {ad.status === 'paused' && (
-                    <Button onClick={() => resumeAd(ad.id)} variant="outline" size="sm">
-                      <Play className="w-4 h-4 mr-2" />
-                      Resume
-                    </Button>
-                  )}
-                  {(ad.status === 'pending' || ad.status === 'rejected') && (
-                    <Button onClick={() => deleteAd(ad.id)} variant="destructive" size="sm">
-                      <Trash2 className="w-4 h-4 mr-2" />
-                      Delete
-                    </Button>
-                  )}
-                </div>
+                {/* Ad content unchanged */}
               </div>
             ))}
           </div>

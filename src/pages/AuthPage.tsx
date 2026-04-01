@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,6 +6,7 @@ import { useToast } from '@/hooks/use-toast';
 import { authService } from '@/lib/auth';
 import { useAuthStore } from '@/stores/authStore';
 import { Loader2 } from 'lucide-react';
+import { AdMob, BannerAdSize, BannerAdPosition } from '@capacitor-community/admob';
 
 export default function AuthPage() {
   const [mode, setMode] = useState<'signin' | 'signup' | 'verify'>('signin');
@@ -16,6 +17,19 @@ export default function AuthPage() {
   const { toast } = useToast();
   const navigate = useNavigate();
   const { login } = useAuthStore();
+
+  useEffect(() => {
+    // Show banner at bottom
+    AdMob.showBanner({
+      adId: "ca-app-pub-7234579833875016/5392885600", // Real Sidebar/Banner ID, works at bottom too
+      adSize: BannerAdSize.BANNER,
+      position: BannerAdPosition.BOTTOM_CENTER
+    });
+
+    return () => {
+      AdMob.hideBanner();
+    };
+  }, []);
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,7 +90,7 @@ export default function AuthPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
       <div className="w-full max-w-md space-y-8">
         <div className="text-center">
           <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-primary mb-6">

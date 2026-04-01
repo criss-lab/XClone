@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase';
 import { TrendingTopic } from '@/types';
 import { PostCard } from '@/components/features/PostCard';
 import { formatNumber } from '@/lib/utils';
+import { AdMob, BannerAdSize, BannerAdPosition } from '@capacitor-community/admob';
 
 export default function ExplorePage() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -25,13 +26,23 @@ export default function ExplorePage() {
     fetchTrendingHashtags();
   }, [activeTab]);
 
+  useEffect(() => {
+    // Show bottom banner ad
+    AdMob.showBanner({
+      adId: "ca-app-pub-7234579833875016/8657343194",
+      adSize: BannerAdSize.BANNER,
+      position: BannerAdPosition.BOTTOM_CENTER,
+    });
+
+    return () => {
+      AdMob.hideBanner();
+    };
+  }, []);
+
   const fetchTrending = async () => {
     setLoading(true);
     try {
-      // First refresh trending topics from real data
       await supabase.rpc('refresh_trending_topics');
-      
-      // Then fetch the updated trending topics
       const { data, error } = await supabase
         .from('trending_topics')
         .select('*')
@@ -50,13 +61,9 @@ export default function ExplorePage() {
   const fetchRankedContent = async () => {
     setLoading(true);
     try {
-      // Fetch top posts by engagement
       const { data } = await supabase
         .from('posts')
-        .select(`
-          *,
-          user_profiles (*)
-        `)
+        .select(`*, user_profiles (*)`)
         .order('likes_count', { ascending: false })
         .order('created_at', { ascending: false })
         .limit(30);
@@ -73,10 +80,7 @@ export default function ExplorePage() {
     try {
       const { data } = await supabase
         .from('trending_hashtags')
-        .select(`
-          *,
-          hashtags (*)
-        `)
+        .select(`*, hashtags (*)`)
         .order('trend_score', { ascending: false })
         .limit(20);
 
@@ -95,14 +99,14 @@ export default function ExplorePage() {
     }
   };
 
-  const filteredTrending = activeTab === 'For You' 
+  const filteredTrending = activeTab === 'For You'
     ? trending.slice(0, 20)
     : activeTab === 'Trending'
       ? trending.slice(0, 20)
       : trending.filter((t) => t.category.toLowerCase() === activeTab.toLowerCase()).slice(0, 20);
 
   return (
-    <div className="min-h-screen bg-background pb-16 md:pb-0">
+    <div className="min-h-screen bg-background pb-20 md:pb-20"> {/* extra padding for banner */}
       <TopBar title="Explore" showProfile={false} />
 
       <div className="sticky top-14 z-30 bg-background border-b border-border">
@@ -139,7 +143,6 @@ export default function ExplorePage() {
       <div>
         {activeTab === 'For You' && (
           <>
-            {/* Trending Hashtags Section */}
             {trendingHashtags.length > 0 && (
               <div className="border-b border-border">
                 <div className="p-4 bg-muted/30">
@@ -165,7 +168,6 @@ export default function ExplorePage() {
               </div>
             )}
 
-            {/* Ranked Content Section */}
             {rankedPosts.length > 0 && (
               <div>
                 <div className="p-4 bg-muted/30 border-b border-border">
@@ -182,12 +184,12 @@ export default function ExplorePage() {
           </>
         )}
 
-        {activeTab === 'Trending' && (
+        {activeTab !== 'For You' && (
           <div className="divide-y divide-border">
             {filteredTrending.length > 0 ? (
               filteredTrending.map((topic, index) => (
-                <div 
-                  key={topic.id} 
+                <div
+                  key={topic.id}
                   className="p-4 hover:bg-muted/5 cursor-pointer transition-colors"
                   onClick={() => {
                     if (topic.topic.startsWith('#')) {
@@ -203,43 +205,7 @@ export default function ExplorePage() {
                         <span className="font-semibold">{index + 1}</span>
                         <span>·</span>
                         <span>{topic.category}</span>
-                        <span>·</span>
-                        <span>Trending</span>
-                      </div>
-                      <h3 className="font-bold text-foreground mt-1 text-lg">{topic.topic}</h3>
-                      <p className="text-muted-foreground text-sm mt-1">
-                        {topic.posts_count.toLocaleString()} posts
-                      </p>
-                    </div>
-                    <TrendingUp className="w-5 h-5 text-primary" />
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="p-8 text-center text-muted-foreground">
-                <TrendingUp className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                <p className="font-semibold text-lg mb-2">No trending topics</p>
-                <p className="text-sm">Check back later for what's trending</p>
-              </div>
-            )}
-          </div>
-        )}
-
-        {(activeTab === 'News' || activeTab === 'Sports' || activeTab === 'Entertainment') && (
-          <div className="divide-y divide-border">
-            {filteredTrending.length > 0 ? (
-              filteredTrending.map((topic, index) => (
-                <div 
-                  key={topic.id} 
-                  className="p-4 hover:bg-muted/5 cursor-pointer transition-colors"
-                  onClick={() => navigate(`/search?q=${encodeURIComponent(topic.topic)}`)}
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center space-x-2 text-muted-foreground text-sm">
-                        <span className="font-semibold">{index + 1}</span>
-                        <span>·</span>
-                        <span>{topic.category}</span>
+                        {activeTab === 'Trending' && <span>· Trending</span>}
                       </div>
                       <h3 className="font-bold text-foreground mt-1 text-lg">{topic.topic}</h3>
                       <p className="text-muted-foreground text-sm mt-1">

@@ -10,6 +10,7 @@ import { Loader2, TrendingUp, Check } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { formatNumber } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
+import { AdMob, BannerAdSize, BannerAdPosition } from '@capacitor-community/admob';
 
 export default function HashtagPage() {
   const { tag } = useParams();
@@ -29,11 +30,22 @@ export default function HashtagPage() {
         checkFollowStatus();
       }
     }
+
+    // Show AdMob banner below TopBar
+    AdMob.showBanner({
+      adId: "ca-app-pub-7234579833875016/8657343194", // Real Feed Top Banner ID
+      adSize: BannerAdSize.BANNER,
+      position: BannerAdPosition.TOP_CENTER
+    });
+
+    // Hide banner on leaving the page
+    return () => {
+      AdMob.hideBanner();
+    };
   }, [tag, user]);
 
   const fetchHashtagAndPosts = async () => {
     try {
-      // Fetch hashtag info
       const { data: hashtagData, error: hashtagError } = await supabase
         .from('hashtags')
         .select('*')
@@ -43,7 +55,6 @@ export default function HashtagPage() {
       if (hashtagError) throw hashtagError;
       setHashtag(hashtagData);
 
-      // Fetch posts with this hashtag
       const { data: postsData, error: postsError } = await supabase
         .from('post_hashtags')
         .select(`
@@ -104,7 +115,6 @@ export default function HashtagPage() {
 
     try {
       if (isFollowing) {
-        // Unfollow
         await supabase
           .from('hashtag_follows')
           .delete()
@@ -117,7 +127,6 @@ export default function HashtagPage() {
           description: `You unfollowed #${tag}`,
         });
       } else {
-        // Follow
         await supabase
           .from('hashtag_follows')
           .insert({

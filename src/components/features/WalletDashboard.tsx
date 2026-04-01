@@ -2,37 +2,55 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useWallet } from '@/hooks/useWallet';
 import { supabase } from '@/lib/supabase';
-import { Wallet, TrendingUp, TrendingDown, DollarSign, Loader2, Phone, Mail, AlertCircle, CheckCircle2, Filter, Download, X } from 'lucide-react';
+import {
+  Wallet, TrendingUp, TrendingDown, DollarSign, Loader2, Phone,
+  Mail, AlertCircle, CheckCircle2, Filter, Download, X, Smartphone,
+  ArrowDownLeft, ArrowUpRight, RefreshCw, Clock, ExternalLink
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { formatNumber } from '@/lib/utils';
+import { FunctionsHttpError } from '@supabase/supabase-js';
+
+const USD_TO_KES = 130;
 
 export function WalletDashboard() {
   const { user } = useAuth();
   const { wallet, loading: walletLoading, fetchWallet, updatePaymentMethods } = useWallet();
   const [transactions, setTransactions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Deposit / withdraw form state
   const [depositAmount, setDepositAmount] = useState('');
+  const [depositPhone, setDepositPhone] = useState('');
   const [withdrawAmount, setWithdrawAmount] = useState('');
-  const [mpesaPhone, setMpesaPhone] = useState('');
-  const [paypalEmail, setPaypalEmail] = useState('');
+  const [withdrawPhone, setWithdrawPhone] = useState('');
   const [showDeposit, setShowDeposit] = useState(false);
   const [showWithdraw, setShowWithdraw] = useState(false);
+  const [processingDeposit, setProcessingDeposit] = useState(false);
+  const [processingWithdraw, setProcessingWithdraw] = useState(false);
+
+  // Waiting / polling state
+  const [depositCheckoutId, setDepositCheckoutId] = useState('');
+  const [depositPolling, setDepositPolling] = useState(false);
+  const [depositPollCount, setDepositPollCount] = useState(0);
+
+  // Payment method settings
+  const [mpesaPhone, setMpesaPhone] = useState('');
+  const [paypalEmail, setPaypalEmail] = useState('');
   const [savingPayment, setSavingPayment] = useState(false);
-  
+
   // Transaction filters
-  const [filterType, setFilterType] = useState<string>('all');
-  const [filterStatus, setFilterStatus] = useState<string>('all');
-  const [filterPaymentMethod, setFilterPaymentMethod] = useState<string>('all');
-  const [filterDateFrom, setFilterDateFrom] = useState<string>('');
-  const [filterDateTo, setFilterDateTo] = useState<string>('');
+  const [filterType, setFilterType] = useState('all');
+  const [filterStatus, setFilterStatus] = useState('all');
+  const [filterPaymentMethod, setFilterPaymentMethod] = useState('all');
+  const [filterDateFrom, setFilterDateFrom] = useState('');
+  const [filterDateTo, setFilterDateTo] = useState('');
   const [showFilters, setShowFilters] = useState(false);
 
   useEffect(() => {
-    if (user) {
-      fetchTransactions();
-    }
+    if (user) fetchTransactions();
   }, [user, filterType, filterStatus, filterPaymentMethod, filterDateFrom, filterDateTo]);
 
   useEffect(() => {
@@ -43,98 +61,170 @@ export function WalletDashboard() {
     }
   }, [wallet]);
 
+  // Pre-fill phone from saved payment method
+  useEffect(() => {
+    if (mpesaPhone) {
+      setDepositPhone(mpesaPhone);
+      setWithdrawPhone(mpesaPhone);
+    }
+  }, [mpesaPhone]);
+
   const fetchTransactions = async () => {
     if (!user) return;
-
     let query = supabase
       .from('wallet_transactions')
       .select('*')
       .eq('user_id', user.id);
 
-    // Apply filters
-    if (filterType !== 'all') {
-      query = query.eq('type', filterType);
-    }
-    if (filterStatus !== 'all') {
-      query = query.eq('status', filterStatus);
-    }
-    if (filterPaymentMethod !== 'all') {
-      query = query.eq('payment_method', filterPaymentMethod);
-    }
-    if (filterDateFrom) {
-      query = query.gte('created_at', new Date(filterDateFrom).toISOString());
-    }
+    if (filterType !== 'all') query = query.eq('type', filterType);
+    if (filterStatus !== 'all') query = query.eq('status', filterStatus);
+    if (filterPaymentMethod !== 'all') query = query.eq('payment_method', filterPaymentMethod);
+    if (filterDateFrom) query = query.gte('created_at', new Date(filterDateFrom).toISOString());
     if (filterDateTo) {
-      const endDate = new Date(filterDateTo);
-      endDate.setHours(23, 59, 59, 999);
-      query = query.lte('created_at', endDate.toISOString());
+      const end = new Date(filterDateTo);
+      end.setHours(23, 59, 59, 999);
+      query = query.lte('created_at', end.toISOString());
     }
 
-    const { data } = await query
-      .order('created_at', { ascending: false })
-      .limit(100);
-
+    const { data } = await query.order('created_at', { ascending: false }).limit(100);
     setTransactions(data || []);
   };
 
-  const handleDeposit = async (method: 'mpesa' | 'paypal') => {
+  // ─── M-Pesa Deposit via STK Push ────────────────────────────────
+  const handleMpesaDeposit = async () => {
     if (!depositAmount || parseFloat(depositAmount) <= 0) {
-      toast.error('Please enter a valid amount');
+      toast.error('Enter a valid amount');
+      return;
+    }
+    if (depositPhone.replace(/\D/g, '').length < 9) {
+      toast.error('Enter a valid M-Pesa phone number');
       return;
     }
 
+    setProcessingDeposit(true);
     try {
-      const { error } = await supabase.from('wallet_transactions').insert({
-        wallet_id: wallet.id,
-        user_id: user!.id,
-        type: 'deposit',
-        amount: parseFloat(depositAmount),
-        payment_method: method,
-        status: 'pending',
-        description: `Deposit via ${method.toUpperCase()}`
+      const kesAmount = Math.ceil(parseFloat(depositAmount) * USD_TO_KES);
+      const { data, error } = await supabase.functions.invoke('mpesa-stk-push', {
+        body: {
+          phone: depositPhone,
+          amount: kesAmount,
+          purpose: 'deposit',
+          metadata: { wallet_id: wallet?.id },
+        },
       });
 
-      if (error) throw error;
+      if (error) {
+        let msg = error.message;
+        if (error instanceof FunctionsHttpError) {
+          try { msg = await error.context?.text() || msg; } catch {}
+        }
+        throw new Error(msg);
+      }
 
-      toast.success(`Deposit request sent. Admin will verify payment.`);
-      setDepositAmount('');
-      setShowDeposit(false);
-      fetchTransactions();
-    } catch (error: any) {
-      toast.error(error.message);
+      setDepositCheckoutId(data.checkout_request_id);
+      setDepositPolling(true);
+      setDepositPollCount(0);
+      toast.success(data.customer_message || 'STK Push sent — check your phone!');
+
+      // Poll for completion
+      let attempts = 0;
+      const interval = setInterval(async () => {
+        attempts++;
+        setDepositPollCount(attempts);
+
+        if (attempts >= 18) {
+          clearInterval(interval);
+          setDepositPolling(false);
+          toast.error('Payment verification timed out. If you paid, it will be credited shortly.');
+          return;
+        }
+
+        try {
+          const { data: statusData } = await supabase.functions.invoke('mpesa-stk-status', {
+            body: { checkout_request_id: data.checkout_request_id },
+          });
+
+          if (statusData?.status === 'completed') {
+            clearInterval(interval);
+            setDepositPolling(false);
+            toast.success(`Deposit of KES ${kesAmount.toLocaleString()} confirmed!`);
+            setShowDeposit(false);
+            setDepositAmount('');
+            fetchWallet();
+            fetchTransactions();
+          } else if (statusData?.status === 'failed' || statusData?.status === 'cancelled') {
+            clearInterval(interval);
+            setDepositPolling(false);
+            toast.error('M-Pesa payment was not completed.');
+          }
+        } catch {
+          // ignore polling errors
+        }
+      }, 5000);
+    } catch (err: any) {
+      console.error('Deposit error:', err);
+      toast.error(err.message || 'Failed to initiate deposit');
+    } finally {
+      setProcessingDeposit(false);
     }
   };
 
-  const handleWithdraw = async (method: 'mpesa' | 'paypal') => {
+  // ─── M-Pesa Withdrawal via B2C ──────────────────────────────────
+  const handleMpesaWithdraw = async () => {
     if (!withdrawAmount || parseFloat(withdrawAmount) <= 0) {
-      toast.error('Please enter a valid amount');
+      toast.error('Enter a valid amount');
       return;
     }
-
-    if (parseFloat(withdrawAmount) > wallet.balance) {
+    if (parseFloat(withdrawAmount) > (wallet?.balance || 0)) {
       toast.error('Insufficient balance');
       return;
     }
+    if (withdrawPhone.replace(/\D/g, '').length < 9) {
+      toast.error('Enter a valid M-Pesa phone number');
+      return;
+    }
 
+    setProcessingWithdraw(true);
     try {
-      const { error } = await supabase.from('wallet_transactions').insert({
-        wallet_id: wallet.id,
-        user_id: user!.id,
-        type: 'withdrawal',
-        amount: parseFloat(withdrawAmount),
-        payment_method: method,
-        status: 'pending',
-        description: `Withdrawal to ${method.toUpperCase()}`
+      const kesAmount = Math.floor(parseFloat(withdrawAmount) * USD_TO_KES);
+      const { data, error } = await supabase.functions.invoke('mpesa-b2c-payout', {
+        body: {
+          phone: withdrawPhone,
+          amount: kesAmount,
+          purpose: 'withdrawal',
+        },
       });
 
-      if (error) throw error;
+      if (error) {
+        let msg = error.message;
+        if (error instanceof FunctionsHttpError) {
+          try { msg = await error.context?.text() || msg; } catch {}
+        }
+        throw new Error(msg);
+      }
 
-      toast.success('Withdrawal request sent. Admin will process it.');
-      setWithdrawAmount('');
+      // Record pending withdrawal in wallet_transactions
+      if (wallet) {
+        await supabase.from('wallet_transactions').insert({
+          wallet_id: wallet.id,
+          user_id: user!.id,
+          type: 'withdrawal',
+          amount: parseFloat(withdrawAmount),
+          payment_method: 'mpesa',
+          status: 'pending',
+          description: `M-Pesa withdrawal to ${withdrawPhone} — KES ${kesAmount.toLocaleString()}`,
+        });
+      }
+
+      toast.success('Withdrawal initiated! Funds will arrive shortly.');
       setShowWithdraw(false);
+      setWithdrawAmount('');
       fetchTransactions();
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (err: any) {
+      console.error('Withdrawal error:', err);
+      toast.error(err.message || 'Failed to initiate withdrawal');
+    } finally {
+      setProcessingWithdraw(false);
     }
   };
 
@@ -142,7 +232,6 @@ export function WalletDashboard() {
     setSavingPayment(true);
     const result = await updatePaymentMethods(mpesaPhone, paypalEmail);
     setSavingPayment(false);
-    
     if (result.success) {
       toast.success('Payment methods updated successfully');
     } else {
@@ -163,7 +252,7 @@ export function WalletDashboard() {
       <div className="text-center py-12">
         <AlertCircle className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
         <h3 className="text-lg font-semibold mb-2">Wallet Not Found</h3>
-        <p className="text-muted-foreground mb-4">We couldn't find your wallet. Creating one now...</p>
+        <p className="text-muted-foreground mb-4">Creating your wallet…</p>
         <Button onClick={fetchWallet}>
           <Wallet className="w-4 h-4 mr-2" />
           Create Wallet
@@ -174,109 +263,217 @@ export function WalletDashboard() {
 
   return (
     <div className="space-y-6">
-      {/* Wallet Balance */}
-      <div className="bg-gradient-to-br from-primary/10 to-purple-500/10 border-2 border-primary/20 rounded-2xl p-6">
-        <div className="flex items-center justify-between mb-4">
+
+      {/* ── Balance Card ─────────────────────────────────── */}
+      <div className="bg-gradient-to-br from-green-600/10 via-primary/10 to-purple-500/10 border-2 border-primary/20 rounded-2xl p-6">
+        <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <div className="p-3 bg-primary/20 rounded-full">
               <Wallet className="w-6 h-6 text-primary" />
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Total Balance</p>
-              <h2 className="text-3xl font-bold text-primary">
-                ${formatNumber(wallet?.balance || 0)}
-              </h2>
+              <p className="text-sm text-muted-foreground">Available Balance</p>
+              <h2 className="text-4xl font-bold">${formatNumber(wallet.balance || 0)}</h2>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                ≈ KES {(wallet.balance * USD_TO_KES).toLocaleString()}
+              </p>
             </div>
           </div>
+          <Button variant="ghost" size="icon" onClick={() => { fetchWallet(); fetchTransactions(); }}>
+            <RefreshCw className="w-4 h-4" />
+          </Button>
         </div>
 
-        <div className="grid grid-cols-2 gap-4 mt-4">
+        <div className="grid grid-cols-2 gap-3">
           <Button
             onClick={() => setShowDeposit(!showDeposit)}
-            className="bg-green-600 hover:bg-green-700"
+            className="bg-green-600 hover:bg-green-700 h-12"
           >
-            <TrendingUp className="w-4 h-4 mr-2" />
+            <ArrowDownLeft className="w-4 h-4 mr-2" />
             Deposit
           </Button>
           <Button
             onClick={() => setShowWithdraw(!showWithdraw)}
             variant="outline"
+            className="h-12 border-2"
           >
-            <TrendingDown className="w-4 h-4 mr-2" />
+            <ArrowUpRight className="w-4 h-4 mr-2" />
             Withdraw
           </Button>
         </div>
       </div>
 
-      {/* Deposit Form */}
+      {/* ── Deposit Form ─────────────────────────────────── */}
       {showDeposit && (
-        <div className="bg-card border border-border rounded-xl p-6">
-          <h3 className="font-bold mb-4">Deposit Funds</h3>
-          <Input
-            type="number"
-            placeholder="Amount"
-            value={depositAmount}
-            onChange={(e) => setDepositAmount(e.target.value)}
-            className="mb-4"
-          />
-          <div className="grid grid-cols-2 gap-3">
-            <Button onClick={() => handleDeposit('mpesa')} className="bg-green-600 hover:bg-green-700">
-              M-Pesa
-            </Button>
-            <Button onClick={() => handleDeposit('paypal')} className="bg-blue-600 hover:bg-blue-700">
-              PayPal
-            </Button>
+        <div className="bg-card border-2 border-green-600/20 rounded-2xl p-6 space-y-4">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="p-2 bg-green-600/10 rounded-lg">
+              <Smartphone className="w-5 h-5 text-green-600" />
+            </div>
+            <div>
+              <h3 className="font-bold">M-Pesa Deposit</h3>
+              <p className="text-xs text-muted-foreground">Instant STK Push — no waiting</p>
+            </div>
           </div>
+
+          <div className="space-y-3">
+            <div>
+              <label className="text-sm font-medium mb-1 block">Amount (USD)</label>
+              <Input
+                type="number"
+                placeholder="10.00"
+                value={depositAmount}
+                onChange={(e) => setDepositAmount(e.target.value)}
+                min="1"
+                step="0.01"
+                className="h-12 text-lg"
+              />
+              {depositAmount && (
+                <p className="text-xs text-green-600 mt-1 font-medium">
+                  = KES {Math.ceil(parseFloat(depositAmount || '0') * USD_TO_KES).toLocaleString()}
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label className="text-sm font-medium mb-1 block">M-Pesa Phone Number</label>
+              <Input
+                type="tel"
+                placeholder="0712 345 678"
+                value={depositPhone}
+                onChange={(e) => setDepositPhone(e.target.value)}
+                className="h-12"
+              />
+            </div>
+          </div>
+
+          {depositPolling ? (
+            <div className="bg-green-600/5 border border-green-600/20 rounded-xl p-4 text-center space-y-2">
+              <div className="flex items-center justify-center gap-2">
+                <Clock className="w-5 h-5 text-green-600 animate-spin" />
+                <span className="font-semibold text-green-600">Waiting for payment…</span>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Check your phone for the M-Pesa prompt and enter your PIN.
+              </p>
+              <p className="text-xs text-muted-foreground">({depositPollCount * 5}s elapsed)</p>
+            </div>
+          ) : (
+            <div className="flex gap-3">
+              <Button variant="outline" className="flex-1" onClick={() => setShowDeposit(false)}>
+                Cancel
+              </Button>
+              <Button
+                className="flex-1 bg-green-600 hover:bg-green-700"
+                onClick={handleMpesaDeposit}
+                disabled={processingDeposit || !depositAmount || !depositPhone}
+              >
+                {processingDeposit
+                  ? <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                  : <Smartphone className="w-4 h-4 mr-2" />}
+                Send STK Push
+              </Button>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Withdraw Form */}
+      {/* ── Withdraw Form ────────────────────────────────── */}
       {showWithdraw && (
-        <div className="bg-card border border-border rounded-xl p-6">
-          <h3 className="font-bold mb-4">Withdraw Funds</h3>
-          <Input
-            type="number"
-            placeholder="Amount"
-            value={withdrawAmount}
-            onChange={(e) => setWithdrawAmount(e.target.value)}
-            className="mb-4"
-          />
-          <div className="grid grid-cols-2 gap-3">
-            <Button onClick={() => handleWithdraw('mpesa')} variant="outline">
-              M-Pesa
+        <div className="bg-card border-2 border-orange-500/20 rounded-2xl p-6 space-y-4">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="p-2 bg-orange-500/10 rounded-lg">
+              <ArrowUpRight className="w-5 h-5 text-orange-500" />
+            </div>
+            <div>
+              <h3 className="font-bold">Withdraw via M-Pesa</h3>
+              <p className="text-xs text-muted-foreground">Funds sent directly to your M-Pesa</p>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <div>
+              <label className="text-sm font-medium mb-1 block">
+                Amount (USD) — Max ${formatNumber(wallet.balance)}
+              </label>
+              <Input
+                type="number"
+                placeholder="10.00"
+                value={withdrawAmount}
+                onChange={(e) => setWithdrawAmount(e.target.value)}
+                max={wallet.balance}
+                min="1"
+                step="0.01"
+                className="h-12 text-lg"
+              />
+              {withdrawAmount && (
+                <p className="text-xs text-orange-500 mt-1 font-medium">
+                  = KES {Math.floor(parseFloat(withdrawAmount || '0') * USD_TO_KES).toLocaleString()}
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label className="text-sm font-medium mb-1 block">M-Pesa Phone Number</label>
+              <Input
+                type="tel"
+                placeholder="0712 345 678"
+                value={withdrawPhone}
+                onChange={(e) => setWithdrawPhone(e.target.value)}
+                className="h-12"
+              />
+            </div>
+          </div>
+
+          <div className="bg-orange-500/5 border border-orange-500/20 rounded-lg p-3 text-xs text-muted-foreground">
+            <AlertCircle className="w-4 h-4 inline mr-1 text-orange-500" />
+            Withdrawals are processed within minutes. Minimum withdrawal: KES 100.
+          </div>
+
+          <div className="flex gap-3">
+            <Button variant="outline" className="flex-1" onClick={() => setShowWithdraw(false)}>
+              Cancel
             </Button>
-            <Button onClick={() => handleWithdraw('paypal')} variant="outline">
-              PayPal
+            <Button
+              className="flex-1 bg-orange-500 hover:bg-orange-600"
+              onClick={handleMpesaWithdraw}
+              disabled={
+                processingWithdraw ||
+                !withdrawAmount ||
+                parseFloat(withdrawAmount) > wallet.balance ||
+                !withdrawPhone
+              }
+            >
+              {processingWithdraw
+                ? <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                : <ArrowUpRight className="w-4 h-4 mr-2" />}
+              Withdraw via M-Pesa
             </Button>
           </div>
         </div>
       )}
 
-      {/* Payment Methods */}
-      <div className="bg-gradient-to-br from-blue-500/5 to-purple-500/5 border-2 border-blue-500/20 rounded-xl p-6">
+      {/* ── Payment Method Settings ──────────────────────── */}
+      <div className="bg-gradient-to-br from-blue-500/5 to-purple-500/5 border-2 border-blue-500/20 rounded-2xl p-6">
         <div className="flex items-center gap-2 mb-4">
           <DollarSign className="w-5 h-5 text-blue-600" />
           <h3 className="font-bold text-lg">Payment Methods</h3>
         </div>
-        
+
         <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 mb-4">
           <div className="flex items-start gap-2">
-            <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-            <div className="text-sm">
-              <p className="font-semibold text-blue-600 mb-1">Connect Your Accounts</p>
-              <p className="text-muted-foreground">
-                Link your M-Pesa and PayPal accounts to receive deposits and withdrawals. 
-                All transactions are secure and encrypted.
-              </p>
-            </div>
+            <AlertCircle className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
+            <p className="text-sm text-muted-foreground">
+              Save your M-Pesa number and PayPal email to speed up future transactions.
+            </p>
           </div>
         </div>
 
         <div className="space-y-4">
           <div>
             <label className="text-sm font-semibold flex items-center gap-2 mb-2">
-              <Phone className="w-4 h-4" />
-              M-Pesa Phone Number
+              <Phone className="w-4 h-4 text-green-600" />
+              M-Pesa Phone
               {mpesaPhone && <CheckCircle2 className="w-4 h-4 text-green-600" />}
             </label>
             <Input
@@ -286,53 +483,40 @@ export function WalletDashboard() {
               onChange={(e) => setMpesaPhone(e.target.value)}
               className="border-2"
             />
-            <p className="text-xs text-muted-foreground mt-1">
-              Include country code (e.g., +254 for Kenya)
-            </p>
           </div>
-          
+
           <div>
             <label className="text-sm font-semibold flex items-center gap-2 mb-2">
-              <Mail className="w-4 h-4" />
+              <Mail className="w-4 h-4 text-blue-600" />
               PayPal Email
               {paypalEmail && <CheckCircle2 className="w-4 h-4 text-green-600" />}
             </label>
             <Input
               type="email"
-              placeholder="your.email@paypal.com"
+              placeholder="you@paypal.com"
               value={paypalEmail}
               onChange={(e) => setPaypalEmail(e.target.value)}
               className="border-2"
             />
-            <p className="text-xs text-muted-foreground mt-1">
-              Must match your verified PayPal account email
-            </p>
           </div>
-          
-          <Button 
-            onClick={handleUpdatePaymentMethods} 
+
+          <Button
+            onClick={handleUpdatePaymentMethods}
             className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
             disabled={savingPayment || (!mpesaPhone && !paypalEmail)}
           >
-            {savingPayment ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              <>
-                <CheckCircle2 className="w-4 h-4 mr-2" />
-                Save Payment Methods
-              </>
-            )}
+            {savingPayment
+              ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              : <CheckCircle2 className="w-4 h-4 mr-2" />}
+            Save Payment Methods
           </Button>
         </div>
       </div>
 
-      {/* Transaction History */}
-      <div className="bg-card border border-border rounded-xl p-6">
+      {/* ── Transaction History ──────────────────────────── */}
+      <div className="bg-card border border-border rounded-2xl p-6">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="font-bold">Transaction History</h3>
+          <h3 className="font-bold text-lg">Transaction History</h3>
           <div className="flex gap-2">
             <Button
               onClick={() => {
@@ -342,24 +526,23 @@ export function WalletDashboard() {
               variant="outline"
               size="sm"
             >
-              <Download className="w-4 h-4 mr-2" />
-              Export CSV
+              <Download className="w-4 h-4 mr-1" />
+              CSV
             </Button>
             <Button
               onClick={() => setShowFilters(!showFilters)}
               variant="outline"
               size="sm"
             >
-              <Filter className="w-4 h-4 mr-2" />
-              {showFilters ? 'Hide' : 'Show'} Filters
+              <Filter className="w-4 h-4 mr-1" />
+              Filter
             </Button>
           </div>
         </div>
 
-        {/* Filters */}
         {showFilters && (
-          <div className="bg-muted/50 rounded-lg p-4 mb-4 space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="bg-muted/50 rounded-xl p-4 mb-4 space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               <div>
                 <label className="text-xs font-semibold mb-1 block">Type</label>
                 <select
@@ -374,7 +557,6 @@ export function WalletDashboard() {
                   <option value="platform_share">Platform Share</option>
                 </select>
               </div>
-              
               <div>
                 <label className="text-xs font-semibold mb-1 block">Status</label>
                 <select
@@ -382,15 +564,14 @@ export function WalletDashboard() {
                   onChange={(e) => setFilterStatus(e.target.value)}
                   className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm"
                 >
-                  <option value="all">All Status</option>
+                  <option value="all">All</option>
                   <option value="pending">Pending</option>
                   <option value="completed">Completed</option>
                   <option value="failed">Failed</option>
                 </select>
               </div>
-              
               <div>
-                <label className="text-xs font-semibold mb-1 block">Payment Method</label>
+                <label className="text-xs font-semibold mb-1 block">Method</label>
                 <select
                   value={filterPaymentMethod}
                   onChange={(e) => setFilterPaymentMethod(e.target.value)}
@@ -401,84 +582,61 @@ export function WalletDashboard() {
                   <option value="paypal">PayPal</option>
                 </select>
               </div>
-              
               <div>
                 <label className="text-xs font-semibold mb-1 block">Date Range</label>
                 <div className="flex gap-1">
-                  <Input
-                    type="date"
-                    value={filterDateFrom}
-                    onChange={(e) => setFilterDateFrom(e.target.value)}
-                    className="text-xs h-9"
-                    placeholder="From"
-                  />
-                  <Input
-                    type="date"
-                    value={filterDateTo}
-                    onChange={(e) => setFilterDateTo(e.target.value)}
-                    className="text-xs h-9"
-                    placeholder="To"
-                  />
+                  <Input type="date" value={filterDateFrom} onChange={(e) => setFilterDateFrom(e.target.value)} className="text-xs h-9" />
+                  <Input type="date" value={filterDateTo} onChange={(e) => setFilterDateTo(e.target.value)} className="text-xs h-9" />
                 </div>
               </div>
             </div>
-            
             <Button
-              onClick={() => {
-                setFilterType('all');
-                setFilterStatus('all');
-                setFilterPaymentMethod('all');
-                setFilterDateFrom('');
-                setFilterDateTo('');
-              }}
-              variant="outline"
-              size="sm"
-              className="w-full"
+              onClick={() => { setFilterType('all'); setFilterStatus('all'); setFilterPaymentMethod('all'); setFilterDateFrom(''); setFilterDateTo(''); }}
+              variant="outline" size="sm" className="w-full"
             >
               <X className="w-4 h-4 mr-2" />
-              Clear All Filters
+              Clear Filters
             </Button>
           </div>
         )}
 
         {transactions.length === 0 ? (
-          <p className="text-center text-muted-foreground py-8">No transactions yet</p>
+          <p className="text-center text-muted-foreground py-10">No transactions yet</p>
         ) : (
           <div className="space-y-3">
             {transactions.map((tx) => (
-              <div key={tx.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+              <div key={tx.id} className="flex items-center justify-between p-3 bg-muted/40 rounded-xl hover:bg-muted/60 transition-colors">
                 <div className="flex items-center gap-3">
                   <div className={`p-2 rounded-full ${
-                    tx.type === 'deposit' || tx.type === 'earnings' 
+                    tx.type === 'deposit' || tx.type === 'earnings'
                       ? 'bg-green-100 text-green-600 dark:bg-green-900/20 dark:text-green-400'
                       : 'bg-red-100 text-red-600 dark:bg-red-900/20 dark:text-red-400'
                   }`}>
-                    {tx.type === 'deposit' || tx.type === 'earnings' ? (
-                      <TrendingUp className="w-4 h-4" />
-                    ) : (
-                      <TrendingDown className="w-4 h-4" />
-                    )}
+                    {tx.type === 'deposit' || tx.type === 'earnings'
+                      ? <ArrowDownLeft className="w-4 h-4" />
+                      : <ArrowUpRight className="w-4 h-4" />}
                   </div>
                   <div>
-                    <p className="font-medium capitalize">{tx.type.replace('_', ' ')}</p>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="font-semibold capitalize text-sm">{tx.type.replace(/_/g, ' ')}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {tx.payment_method ? `${tx.payment_method.toUpperCase()} · ` : ''}
                       {new Date(tx.created_at).toLocaleDateString()}
                     </p>
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className={`text-lg font-bold ${
-                    tx.type === 'deposit' || tx.type === 'earnings' ? 'text-green-600' : 'text-red-600'
+                  <p className={`text-base font-bold ${
+                    tx.type === 'deposit' || tx.type === 'earnings' ? 'text-green-600' : 'text-red-500'
                   }`}>
                     {tx.type === 'deposit' || tx.type === 'earnings' ? '+' : '-'}${tx.amount}
                   </p>
-                  <p className={`text-xs ${
-                    tx.status === 'completed' ? 'text-green-600' :
-                    tx.status === 'pending' ? 'text-orange-600' :
-                    'text-red-600'
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                    tx.status === 'completed' ? 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400' :
+                    tx.status === 'pending' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/20 dark:text-orange-400' :
+                    'bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-400'
                   }`}>
                     {tx.status}
-                  </p>
+                  </span>
                 </div>
               </div>
             ))}
@@ -489,24 +647,18 @@ export function WalletDashboard() {
   );
 }
 
-// CSV generation helpers
 function generateCSV(transactions: any[]): string {
   const headers = ['Date', 'Type', 'Amount', 'Status', 'Payment Method', 'Description'];
   const rows = transactions.map(tx => [
     new Date(tx.created_at).toLocaleString(),
-    tx.type,
-    tx.amount,
-    tx.status,
+    tx.type, tx.amount, tx.status,
     tx.payment_method || 'N/A',
     tx.description || ''
   ]);
-  
-  const csv = [
+  return [
     headers.join(','),
     ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
   ].join('\n');
-  
-  return csv;
 }
 
 function downloadCSV(csv: string, filename: string) {
@@ -518,3 +670,6 @@ function downloadCSV(csv: string, filename: string) {
   a.click();
   window.URL.revokeObjectURL(url);
 }
+
+// suppress unused import warning
+const _unused = ExternalLink;
