@@ -1,12 +1,23 @@
 import { useState, useEffect } from 'react';
 import { TopBar } from '@/components/layout/TopBar';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { DollarSign, TrendingUp, Wallet, Download, Loader2, AlertCircle } from 'lucide-react';
-import { Input } from '@/components/ui/input';
+import {
+  DollarSign, TrendingUp, Wallet, Loader2, AlertCircle,
+  Smartphone, Phone, Clock, CheckCircle2, XCircle, ArrowUpRight,
+  RefreshCw, Mail, Download
+} from 'lucide-react';
+import { FunctionsHttpError } from '@supabase/supabase-js';
+import { Label } from '@/components/ui/label';
+
+const USD_TO_KES = 130;
+
+type PayoutMethod = 'mpesa' | 'paypal';
+type WithdrawStep = 'idle' | 'sending' | 'polling' | 'done' | 'failed';
 
 export default function PayoutsPage() {
   const { user } = useAuth();
@@ -14,134 +25,167 @@ export default function PayoutsPage() {
   const [loading, setLoading] = useState(true);
   const [monetization, setMonetization] = useState<any>(null);
   const [revenueShare, setRevenueShare] = useState<any>(null);
-  const [paypalEmail, setPaypalEmail] = useState('');
-  const [withdrawAmount, setWithdrawAmount] = useState('');
   const [transactions, setTransactions] = useState<any[]>([]);
 
+  // Withdrawal form
+  const [payoutMethod, setPayoutMethod] = useState<PayoutMethod>('mpesa');
+  const [mpesaPhone, setMpesaPhone] = useState('');
+  const [paypalEmail, setPaypalEmail] = useState('');
+  const [withdrawAmount, setWithdrawAmount] = useState('');
+
+  // M-Pesa B2C flow state
+  const [withdrawStep, setWithdrawStep] = useState<WithdrawStep>('idle');
+  const [pollCount, setPollCount] = useState(0);
+  const [pollTimer, setPollTimer] = useState<ReturnType<typeof setInterval> | null>(null);
+
   useEffect(() => {
-    if (!user) {
-      navigate('/auth');
-      return;
-    }
+    if (!user) { navigate('/auth'); return; }
     fetchData();
   }, [user]);
 
+  // cleanup on unmount
+  useEffect(() => () => { if (pollTimer) clearInterval(pollTimer); }, [pollTimer]);
+
   const fetchData = async () => {
     try {
-      // Fetch monetization status
-      const { data: monetizationData } = await supabase
-        .from('user_monetization')
-        .select('*')
-        .eq('user_id', user!.id)
-        .single();
+      const [monData, revData, txData, walletData] = await Promise.all([
+        supabase.from('user_monetization').select('*').eq('user_id', user!.id).single(),
+        supabase.from('revenue_shares').select('*').eq('user_id', user!.id).single(),
+        supabase.from('wallet_transactions').select('*').eq('user_id', user!.id)
+          .in('type', ['earnings', 'withdrawal', 'platform_share', 'creator_payout'])
+          .order('created_at', { ascending: false }).limit(50),
+        supabase.from('user_wallets').select('mpesa_phone,paypal_email').eq('user_id', user!.id).single(),
+      ]);
 
-      setMonetization(monetizationData);
-      setPaypalEmail(monetizationData?.paypal_email || '');
-
-      // Fetch revenue share
-      const { data: revenueData } = await supabase
-        .from('revenue_shares')
-        .select('*')
-        .eq('user_id', user!.id)
-        .single();
-
-      setRevenueShare(revenueData);
-
-      // Fetch transactions
-      const { data: transactionsData } = await supabase
-        .from('wallet_transactions')
-        .select('*')
-        .eq('user_id', user!.id)
-        .in('type', ['earnings', 'withdrawal', 'platform_share'])
-        .order('created_at', { ascending: false })
-        .limit(50);
-
-      setTransactions(transactionsData || []);
-    } catch (error) {
-      console.error('Error fetching data:', error);
+      setMonetization(monData.data);
+      setRevenueShare(revData.data);
+      setTransactions(txData.data || []);
+      if (walletData.data) {
+        setMpesaPhone(walletData.data.mpesa_phone || '');
+        setPaypalEmail(walletData.data.paypal_email || '');
+      }
+    } catch (err) {
+      console.error('fetchData error:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  const updatePayPalEmail = async () => {
-    if (!paypalEmail.trim()) {
-      toast.error('Please enter a valid PayPal email');
-      return;
-    }
-
-    try {
-      const { error } = await supabase
-        .from('user_monetization')
-        .update({ paypal_email: paypalEmail })
-        .eq('user_id', user!.id);
-
-      if (error) throw error;
-      toast.success('PayPal email updated');
-      fetchData();
-    } catch (error: any) {
-      toast.error(error.message);
-    }
-  };
-
-  const requestWithdrawal = async () => {
+  // ── M-Pesa B2C Creator Payout ────────────────────────────────────
+  const handleMpesaWithdraw = async () => {
     const amount = parseFloat(withdrawAmount);
-    
-    if (!amount || amount <= 0) {
-      toast.error('Please enter a valid amount');
-      return;
-    }
+    if (!amount || amount <= 0) { toast.error('Enter a valid amount'); return; }
+    const available = monetization?.pending_user_payout || 0;
+    if (amount > available) { toast.error(`Maximum available: $${available.toFixed(2)}`); return; }
+    if (mpesaPhone.replace(/\D/g, '').length < 9) { toast.error('Enter a valid M-Pesa phone number'); return; }
 
-    if (!paypalEmail) {
-      toast.error('Please set your PayPal email first');
-      return;
-    }
-
-    if (amount > (monetization?.pending_user_payout || 0)) {
-      toast.error('Insufficient funds available for withdrawal');
-      return;
-    }
-
+    setWithdrawStep('sending');
     try {
-      // Create withdrawal transaction
-      const { data: wallet } = await supabase
-        .from('user_wallets')
-        .select('id')
-        .eq('user_id', user!.id)
-        .single();
+      const kesAmount = Math.floor(amount * USD_TO_KES);
+      const { data, error } = await supabase.functions.invoke('mpesa-b2c-payout', {
+        body: { phone: mpesaPhone, amount: kesAmount, purpose: 'creator_payout' },
+      });
 
-      const { error } = await supabase
-        .from('wallet_transactions')
-        .insert({
-          wallet_id: wallet!.id,
+      if (error) {
+        let msg = error.message;
+        if (error instanceof FunctionsHttpError) {
+          try { msg = await error.context?.text() || msg; } catch {}
+        }
+        throw new Error(msg);
+      }
+
+      console.log('B2C payout initiated:', data);
+
+      // Deduct from pending payout
+      await supabase.from('user_monetization').update({
+        pending_user_payout: Math.max(0, available - amount),
+      }).eq('user_id', user!.id);
+
+      // Record transaction
+      const { data: wallet } = await supabase.from('user_wallets').select('id').eq('user_id', user!.id).single();
+      if (wallet) {
+        await supabase.from('wallet_transactions').insert({
+          wallet_id: wallet.id,
           user_id: user!.id,
           type: 'withdrawal',
-          amount: amount,
-          payment_method: 'paypal',
+          amount,
+          payment_method: 'mpesa',
           status: 'pending',
-          description: 'PayPal withdrawal request',
-          metadata: {
-            paypal_email: paypalEmail
-          }
+          description: `Creator payout to ${mpesaPhone} — KES ${kesAmount.toLocaleString()}`,
         });
+      }
 
-      if (error) throw error;
+      // Insert payment notification
+      await supabase.from('notifications').insert({
+        user_id: user!.id,
+        type: 'payment_sent',
+        from_user_id: user!.id,
+        metadata: { purpose: 'creator_payout', amount, kes_amount: kesAmount, phone: mpesaPhone },
+      });
 
-      // Update pending payout
-      await supabase
-        .from('user_monetization')
-        .update({
-          pending_user_payout: (monetization.pending_user_payout || 0) - amount
-        })
-        .eq('user_id', user!.id);
-
-      toast.success('Withdrawal request submitted! Funds will be sent to your PayPal within 2-5 business days.');
+      setWithdrawStep('done');
+      toast.success(`KES ${kesAmount.toLocaleString()} payout initiated to ${mpesaPhone}!`);
       setWithdrawAmount('');
       fetchData();
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (err: any) {
+      console.error('B2C payout error:', err);
+      setWithdrawStep('failed');
+      toast.error(err.message || 'Payout failed — try again');
     }
   };
+
+  // ── PayPal Withdrawal (recorded as pending) ─────────────────────
+  const handlePaypalWithdraw = async () => {
+    const amount = parseFloat(withdrawAmount);
+    if (!amount || amount <= 0) { toast.error('Enter a valid amount'); return; }
+    const available = monetization?.pending_user_payout || 0;
+    if (amount > available) { toast.error(`Maximum: $${available.toFixed(2)}`); return; }
+    if (!paypalEmail.includes('@')) { toast.error('Enter a valid PayPal email'); return; }
+
+    setWithdrawStep('sending');
+    try {
+      const { data: wallet } = await supabase.from('user_wallets').select('id').eq('user_id', user!.id).single();
+      if (!wallet) throw new Error('Wallet not found');
+
+      await supabase.from('wallet_transactions').insert({
+        wallet_id: wallet.id,
+        user_id: user!.id,
+        type: 'withdrawal',
+        amount,
+        payment_method: 'paypal',
+        status: 'pending',
+        description: `PayPal withdrawal to ${paypalEmail}`,
+        metadata: { paypal_email: paypalEmail },
+      });
+
+      await supabase.from('user_monetization').update({
+        pending_user_payout: Math.max(0, available - amount),
+      }).eq('user_id', user!.id);
+
+      // Payment notification
+      await supabase.from('notifications').insert({
+        user_id: user!.id,
+        type: 'payment_sent',
+        from_user_id: user!.id,
+        metadata: { purpose: 'paypal_withdrawal', amount, email: paypalEmail },
+      });
+
+      setWithdrawStep('done');
+      toast.success('PayPal withdrawal request submitted (2–5 business days)');
+      setWithdrawAmount('');
+      fetchData();
+    } catch (err: any) {
+      setWithdrawStep('failed');
+      toast.error(err.message || 'Withdrawal failed');
+    }
+  };
+
+  const handleWithdraw = () => {
+    if (payoutMethod === 'mpesa') handleMpesaWithdraw();
+    else handlePaypalWithdraw();
+  };
+
+  const resetWithdraw = () => { setWithdrawStep('idle'); setPollCount(0); };
 
   if (loading) {
     return (
@@ -155,36 +199,32 @@ export default function PayoutsPage() {
     return (
       <div className="min-h-screen bg-background pb-16 md:pb-0">
         <TopBar title="Payouts" showBack />
-        <div className="max-w-2xl mx-auto p-6">
-          <div className="text-center py-12">
-            <AlertCircle className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
-            <h2 className="text-2xl font-bold mb-2">Monetization Not Enabled</h2>
-            <p className="text-muted-foreground mb-6">
-              You need to be monetized to receive ad revenue and payouts
-            </p>
-            <Button onClick={() => navigate('/monetization')}>
-              Go to Monetization
-            </Button>
-          </div>
+        <div className="max-w-2xl mx-auto p-6 text-center py-20">
+          <AlertCircle className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
+          <h2 className="text-2xl font-bold mb-2">Monetization Not Enabled</h2>
+          <p className="text-muted-foreground mb-6">Enable monetization to receive ad revenue and creator payouts.</p>
+          <Button onClick={() => navigate('/monetization')}>Go to Monetization</Button>
         </div>
       </div>
     );
   }
 
-  const platformShare = monetization?.platform_share_percentage || 70;
-  const userShare = monetization?.user_share_percentage || 30;
+  const available = monetization?.pending_user_payout || 0;
+  const userSharePct = monetization?.user_share_percentage || 30;
+  const platformSharePct = monetization?.platform_share_percentage || 70;
 
   return (
     <div className="min-h-screen bg-background pb-16 md:pb-0">
       <TopBar title="Payouts & Revenue" showBack />
 
-      <div className="max-w-4xl mx-auto p-6 space-y-6">
-        {/* Revenue Stats */}
+      <div className="max-w-4xl mx-auto p-4 space-y-6">
+
+        {/* ── Revenue Stats ── */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="border border-border rounded-xl p-6 bg-gradient-to-br from-green-500/10 to-emerald-500/10">
-            <div className="flex items-center gap-3 mb-2">
+          <div className="border border-border rounded-2xl p-5 bg-gradient-to-br from-green-500/10 to-emerald-500/10">
+            <div className="flex items-center gap-2 mb-1">
               <DollarSign className="w-5 h-5 text-green-600" />
-              <span className="text-sm text-muted-foreground">Your Share ({userShare}%)</span>
+              <span className="text-sm text-muted-foreground">Your Share ({userSharePct}%)</span>
             </div>
             <p className="text-3xl font-bold text-green-600">
               ${(revenueShare?.user_share || 0).toFixed(2)}
@@ -192,21 +232,19 @@ export default function PayoutsPage() {
             <p className="text-xs text-muted-foreground mt-1">Total earned</p>
           </div>
 
-          <div className="border border-border rounded-xl p-6 bg-gradient-to-br from-blue-500/10 to-cyan-500/10">
-            <div className="flex items-center gap-3 mb-2">
+          <div className="border border-border rounded-2xl p-5 bg-gradient-to-br from-blue-500/10 to-cyan-500/10">
+            <div className="flex items-center gap-2 mb-1">
               <Wallet className="w-5 h-5 text-blue-600" />
-              <span className="text-sm text-muted-foreground">Available</span>
+              <span className="text-sm text-muted-foreground">Available Now</span>
             </div>
-            <p className="text-3xl font-bold text-blue-600">
-              ${(monetization?.pending_user_payout || 0).toFixed(2)}
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">Ready to withdraw</p>
+            <p className="text-3xl font-bold text-blue-600">${available.toFixed(2)}</p>
+            <p className="text-xs text-muted-foreground mt-1">≈ KES {(available * USD_TO_KES).toLocaleString()}</p>
           </div>
 
-          <div className="border border-border rounded-xl p-6 bg-gradient-to-br from-purple-500/10 to-pink-500/10">
-            <div className="flex items-center gap-3 mb-2">
+          <div className="border border-border rounded-2xl p-5 bg-gradient-to-br from-purple-500/10 to-pink-500/10">
+            <div className="flex items-center gap-2 mb-1">
               <TrendingUp className="w-5 h-5 text-purple-600" />
-              <span className="text-sm text-muted-foreground">Platform Share ({platformShare}%)</span>
+              <span className="text-sm text-muted-foreground">Platform ({platformSharePct}%)</span>
             </div>
             <p className="text-3xl font-bold text-purple-600">
               ${(revenueShare?.platform_share || 0).toFixed(2)}
@@ -215,109 +253,215 @@ export default function PayoutsPage() {
           </div>
         </div>
 
-        {/* PayPal Configuration */}
-        <div className="border border-border rounded-xl p-6">
-          <h2 className="text-xl font-bold mb-4">PayPal Configuration</h2>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-semibold mb-2">Your PayPal Email</label>
-              <div className="flex gap-2">
-                <Input
-                  value={paypalEmail}
-                  onChange={(e) => setPaypalEmail(e.target.value)}
-                  placeholder="your.email@paypal.com"
-                  type="email"
-                  className="flex-1"
-                />
-                <Button onClick={updatePayPalEmail}>
-                  Save
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                Withdrawals will be sent to this PayPal account
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Withdrawal */}
-        <div className="border border-border rounded-xl p-6">
-          <h2 className="text-xl font-bold mb-4">Request Withdrawal</h2>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-semibold mb-2">Amount (USD)</label>
-              <Input
-                value={withdrawAmount}
-                onChange={(e) => setWithdrawAmount(e.target.value)}
-                placeholder="0.00"
-                type="number"
-                step="0.01"
-                min="0"
-                max={monetization?.pending_user_payout || 0}
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                Maximum: ${(monetization?.pending_user_payout || 0).toFixed(2)}
-              </p>
-            </div>
-
-            <Button 
-              onClick={requestWithdrawal} 
-              className="w-full"
-              disabled={!paypalEmail || !withdrawAmount}
-            >
-              <Download className="w-4 h-4 mr-2" />
-              Request Withdrawal to PayPal
+        {/* ── Payout Method Tabs ── */}
+        <div className="border border-border rounded-2xl p-6 space-y-5">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-bold">Request Payout</h2>
+            <Button variant="ghost" size="icon" onClick={fetchData}>
+              <RefreshCw className="w-4 h-4" />
             </Button>
-
-            <div className="bg-muted/30 rounded-lg p-4 text-sm">
-              <p className="font-semibold mb-2">Withdrawal Information:</p>
-              <ul className="space-y-1 text-muted-foreground">
-                <li>• Processing time: 2-5 business days</li>
-                <li>• Minimum withdrawal: $10.00</li>
-                <li>• PayPal fees may apply</li>
-                <li>• Revenue is split: {userShare}% to you, {platformShare}% to platform</li>
-              </ul>
-            </div>
           </div>
+
+          {/* Method toggle */}
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              onClick={() => { setPayoutMethod('mpesa'); resetWithdraw(); }}
+              className={`flex items-center gap-3 p-4 rounded-xl border-2 transition-all ${
+                payoutMethod === 'mpesa'
+                  ? 'border-green-500 bg-green-500/10'
+                  : 'border-border hover:border-green-300'
+              }`}
+            >
+              <div className="w-10 h-10 bg-green-600 rounded-lg flex items-center justify-center shrink-0">
+                <Smartphone className="w-5 h-5 text-white" />
+              </div>
+              <div className="text-left">
+                <p className="font-bold text-sm">M-Pesa</p>
+                <p className="text-xs text-muted-foreground">Instant B2C payout</p>
+              </div>
+            </button>
+
+            <button
+              onClick={() => { setPayoutMethod('paypal'); resetWithdraw(); }}
+              className={`flex items-center gap-3 p-4 rounded-xl border-2 transition-all ${
+                payoutMethod === 'paypal'
+                  ? 'border-blue-500 bg-blue-500/10'
+                  : 'border-border hover:border-blue-300'
+              }`}
+            >
+              <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center shrink-0">
+                <Mail className="w-5 h-5 text-white" />
+              </div>
+              <div className="text-left">
+                <p className="font-bold text-sm">PayPal</p>
+                <p className="text-xs text-muted-foreground">2–5 business days</p>
+              </div>
+            </button>
+          </div>
+
+          {/* Idle / form state */}
+          {(withdrawStep === 'idle' || withdrawStep === 'failed') && (
+            <div className="space-y-4">
+              {withdrawStep === 'failed' && (
+                <div className="flex items-center gap-2 bg-destructive/10 border border-destructive/20 rounded-lg px-4 py-3 text-sm text-destructive">
+                  <XCircle className="w-4 h-4 shrink-0" />
+                  Payout failed. Please check your details and try again.
+                </div>
+              )}
+
+              <div>
+                <Label className="mb-1 block">
+                  Amount (USD) — Available: <span className="font-bold text-green-600">${available.toFixed(2)}</span>
+                </Label>
+                <Input
+                  type="number" min="1" step="0.01" max={available}
+                  placeholder="10.00"
+                  value={withdrawAmount}
+                  onChange={(e) => setWithdrawAmount(e.target.value)}
+                  className="h-12 text-lg"
+                />
+                {withdrawAmount && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    ≈ KES {Math.floor(parseFloat(withdrawAmount || '0') * USD_TO_KES).toLocaleString()}
+                  </p>
+                )}
+              </div>
+
+              {payoutMethod === 'mpesa' ? (
+                <div>
+                  <Label className="mb-1 block flex items-center gap-2">
+                    <Phone className="w-4 h-4 text-green-600" />
+                    M-Pesa Phone Number
+                  </Label>
+                  <Input
+                    type="tel" placeholder="+254712345678"
+                    value={mpesaPhone}
+                    onChange={(e) => setMpesaPhone(e.target.value)}
+                    className="h-12"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Funds sent directly to your M-Pesa wallet (B2C)
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <Label className="mb-1 block">PayPal Email</Label>
+                  <Input
+                    type="email" placeholder="you@paypal.com"
+                    value={paypalEmail}
+                    onChange={(e) => setPaypalEmail(e.target.value)}
+                    className="h-12"
+                  />
+                </div>
+              )}
+
+              <Button
+                onClick={handleWithdraw}
+                disabled={!withdrawAmount || parseFloat(withdrawAmount) > available || parseFloat(withdrawAmount) <= 0}
+                className={`w-full h-12 font-bold text-white ${
+                  payoutMethod === 'mpesa'
+                    ? 'bg-green-600 hover:bg-green-700'
+                    : 'bg-blue-600 hover:bg-blue-700'
+                }`}
+              >
+                <ArrowUpRight className="w-4 h-4 mr-2" />
+                {payoutMethod === 'mpesa' ? 'Send via M-Pesa B2C' : 'Request PayPal Payout'}
+              </Button>
+
+              <p className="text-xs text-muted-foreground text-center">
+                Minimum payout: $1 · Revenue split: {userSharePct}% to you, {platformSharePct}% to platform
+              </p>
+            </div>
+          )}
+
+          {/* Sending state */}
+          {withdrawStep === 'sending' && (
+            <div className="text-center py-8 space-y-3">
+              <Loader2 className="w-12 h-12 animate-spin text-green-600 mx-auto" />
+              <p className="font-semibold">Processing payout…</p>
+              <p className="text-sm text-muted-foreground">Please wait while we initiate the transfer</p>
+            </div>
+          )}
+
+          {/* Success state */}
+          {withdrawStep === 'done' && (
+            <div className="text-center py-8 space-y-4">
+              <div className="w-16 h-16 bg-green-600/10 rounded-full flex items-center justify-center mx-auto">
+                <CheckCircle2 className="w-8 h-8 text-green-600" />
+              </div>
+              <div>
+                <p className="font-bold text-lg text-green-600">Payout Initiated!</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {payoutMethod === 'mpesa'
+                    ? 'Funds will arrive in your M-Pesa within minutes.'
+                    : 'PayPal transfer will complete in 2–5 business days.'}
+                </p>
+              </div>
+              <Button variant="outline" className="w-full" onClick={resetWithdraw}>
+                Request Another Payout
+              </Button>
+            </div>
+          )}
         </div>
 
-        {/* Transaction History */}
-        <div className="border border-border rounded-xl p-6">
-          <h2 className="text-xl font-bold mb-4">Transaction History</h2>
-          <div className="space-y-3">
-            {transactions.length === 0 ? (
-              <p className="text-center text-muted-foreground py-8">No transactions yet</p>
-            ) : (
-              transactions.map((tx) => (
-                <div key={tx.id} className="flex items-center justify-between p-3 border border-border rounded-lg">
-                  <div className="flex-1">
-                    <p className="font-semibold capitalize">{tx.type.replace('_', ' ')}</p>
-                    <p className="text-sm text-muted-foreground">{tx.description}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {new Date(tx.created_at).toLocaleDateString()}
-                    </p>
+        {/* ── Transaction History ── */}
+        <div className="border border-border rounded-2xl p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold">Payout History</h2>
+            <Button variant="ghost" size="sm" onClick={() => {
+              const csv = [
+                'Date,Type,Amount,Status,Method',
+                ...transactions.map(t =>
+                  `"${new Date(t.created_at).toLocaleString()}","${t.type}","${t.amount}","${t.status}","${t.payment_method || ''}"`
+                )
+              ].join('\n');
+              const blob = new Blob([csv], { type: 'text/csv' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url; a.download = 'payouts.csv'; a.click();
+              URL.revokeObjectURL(url);
+            }}>
+              <Download className="w-4 h-4 mr-1" /> CSV
+            </Button>
+          </div>
+
+          {transactions.length === 0 ? (
+            <p className="text-center text-muted-foreground py-8">No payout transactions yet</p>
+          ) : (
+            <div className="space-y-3">
+              {transactions.map((tx) => (
+                <div key={tx.id} className="flex items-center justify-between p-3 bg-muted/40 rounded-xl">
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2 rounded-full ${
+                      tx.type === 'earnings' ? 'bg-green-100 text-green-600 dark:bg-green-900/20' : 'bg-orange-100 text-orange-600 dark:bg-orange-900/20'
+                    }`}>
+                      {tx.type === 'earnings' ? <DollarSign className="w-4 h-4" /> : <ArrowUpRight className="w-4 h-4" />}
+                    </div>
+                    <div>
+                      <p className="font-semibold text-sm capitalize">{tx.type.replace(/_/g, ' ')}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {tx.payment_method?.toUpperCase() || 'N/A'} · {new Date(tx.created_at).toLocaleDateString()}
+                      </p>
+                    </div>
                   </div>
                   <div className="text-right">
-                    <p className={`font-bold ${
-                      tx.type === 'earnings' ? 'text-green-600' : 
-                      tx.type === 'withdrawal' ? 'text-red-600' : 
-                      'text-muted-foreground'
-                    }`}>
-                      {tx.type === 'earnings' ? '+' : '-'}${tx.amount.toFixed(2)}
+                    <p className={`font-bold ${tx.type === 'earnings' ? 'text-green-600' : 'text-orange-500'}`}>
+                      {tx.type === 'earnings' ? '+' : '-'}${Number(tx.amount).toFixed(2)}
                     </p>
-                    <span className={`text-xs px-2 py-1 rounded-full ${
-                      tx.status === 'completed' ? 'bg-green-500/10 text-green-600' :
-                      tx.status === 'pending' ? 'bg-yellow-500/10 text-yellow-600' :
-                      'bg-red-500/10 text-red-600'
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${
+                      tx.status === 'completed' ? 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400' :
+                      tx.status === 'pending'   ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-400' :
+                                                   'bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-400'
                     }`}>
                       {tx.status}
                     </span>
                   </div>
                 </div>
-              ))
-            )}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
+
       </div>
     </div>
   );

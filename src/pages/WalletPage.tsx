@@ -1,22 +1,14 @@
 import { useEffect } from "react";
 import { TopBar } from '@/components/layout/TopBar';
 import { WalletDashboard } from '@/components/features/WalletDashboard';
-import { AdMob, BannerAdSize, BannerAdPosition } from '@capacitor-community/admob';
+import { showBanner, hideBanner, ADMOB_CONFIG } from '@/lib/admob';
+import { BannerAdPosition } from '@capacitor-community/admob';
 
 export default function WalletPage() {
 
   useEffect(() => {
-    // Show the real AdMob banner below TopBar
-    AdMob.showBanner({
-      adId: "ca-app-pub-7234579833875016/8657343194", // Real Feed Top Banner ID
-      adSize: BannerAdSize.BANNER,
-      position: BannerAdPosition.TOP_CENTER
-    });
-
-    // Hide banner when leaving page
-    return () => {
-      AdMob.hideBanner();
-    };
+    showBanner(ADMOB_CONFIG.BANNER_FEED, BannerAdPosition.TOP_CENTER);
+    return () => { hideBanner(); };
   }, []);
 
   return (

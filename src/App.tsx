@@ -1,5 +1,4 @@
 import { useEffect } from "react";
-import { AdMob, BannerAdSize, BannerAdPosition } from "@capacitor-community/admob";
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from '@/components/layout/AuthProvider';
 import { Sidebar } from '@/components/layout/Sidebar';
@@ -8,6 +7,9 @@ import { BottomNav } from '@/components/layout/BottomNav';
 import { FloatingActionButton } from '@/components/layout/FloatingActionButton';
 import { Toaster } from '@/components/ui/toaster';
 import { Toaster as Sonner } from 'sonner';
+import { initAdMob, showBanner, ADMOB_CONFIG } from '@/lib/admob';
+import { BannerAdPosition } from '@capacitor-community/admob';
+
 import HomePage from '@/pages/HomePage';
 import ExplorePage from '@/pages/ExplorePage';
 import NotificationsPage from '@/pages/NotificationsPage';
@@ -52,57 +54,42 @@ import AdPerformanceComparison from '@/pages/AdPerformanceComparison';
 import AdminRevenueDashboard from '@/pages/AdminRevenueDashboard';
 
 export default function App() {
-
   useEffect(() => {
-    const initAds = async () => {
-      try {
-        await AdMob.initialize({
-          requestTrackingAuthorization: false,
-          testingDevices: [],
-          initializeForTesting: false,
-        });
+    // ── Production AdMob Init ──────────────────────────────────────
+    const bootAds = async () => {
+      await initAdMob(); // single global init, no test mode
 
-        // ✅ SHOW TOP BANNER FIRST
-        await AdMob.showBanner({
-          adId: "ca-app-pub-7234579833875016/8657343194",
-          adSize: BannerAdSize.ADAPTIVE_BANNER,
-          position: BannerAdPosition.TOP_CENTER,
-        });
+      // Feed top banner
+      await showBanner(
+        ADMOB_CONFIG.BANNER_FEED,
+        BannerAdPosition.TOP_CENTER,
+        0
+      );
 
-        // 🔄 ROTATE TO INLINE SAFE POSITION (NO NAV OVERLAP)
-        setTimeout(async () => {
-          try {
-            await AdMob.hideBanner();
-
-            await AdMob.showBanner({
-              adId: "ca-app-pub-7234579833875016/5392885600",
-              adSize: BannerAdSize.ADAPTIVE_BANNER,
-              position: BannerAdPosition.BOTTOM_CENTER,
-              margin: 80, // ✅ pushes it ABOVE bottom nav
-            });
-
-          } catch (err) {
-            console.error("Banner switch error:", err);
-          }
-        }, 8000); // show after 8 seconds
-
-      } catch (err) {
-        console.error("AdMob init error:", err);
-      }
+      // Rotate to bottom after 10 s (above bottom nav)
+      setTimeout(async () => {
+        try {
+          const { hideBanner: hide } = await import('@/lib/admob');
+          await hide();
+          await showBanner(
+            ADMOB_CONFIG.BANNER_BOTTOM,
+            BannerAdPosition.BOTTOM_CENTER,
+            80 // above bottom nav
+          );
+        } catch (_) {/* ignore */}
+      }, 10_000);
     };
 
-    initAds();
+    bootAds();
   }, []);
 
   return (
     <BrowserRouter>
       <AuthProvider>
         <div className="flex min-h-screen bg-background overflow-x-hidden pb-20">
-          {/* 👆 padding bottom prevents overlap */}
-
           <Sidebar />
 
-          <main className="flex-1 max-w-2xl w-full border-x border-border overflow-x-hidden">  
+          <main className="flex-1 max-w-2xl w-full border-x border-border overflow-x-hidden">
             <Routes>
               <Route path="/" element={<HomePage />} />
               <Route path="/explore" element={<ExplorePage />} />

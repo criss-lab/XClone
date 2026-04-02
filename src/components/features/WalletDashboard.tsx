@@ -3,15 +3,18 @@ import { useAuth } from '@/hooks/useAuth';
 import { useWallet } from '@/hooks/useWallet';
 import { supabase } from '@/lib/supabase';
 import {
-  Wallet, TrendingUp, TrendingDown, DollarSign, Loader2, Phone,
+  Wallet, TrendingUp, DollarSign, Loader2, Phone,
   Mail, AlertCircle, CheckCircle2, Filter, Download, X, Smartphone,
-  ArrowDownLeft, ArrowUpRight, RefreshCw, Clock, ExternalLink
+  ArrowDownLeft, ArrowUpRight, RefreshCw, Clock, ExternalLink,
+  Building2, Copy, Info
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { toast } from 'sonner';
 import { formatNumber } from '@/lib/utils';
 import { FunctionsHttpError } from '@supabase/supabase-js';
+
+const sonnerToast = toast;
 
 const USD_TO_KES = 130;
 
@@ -375,6 +378,40 @@ export function WalletDashboard() {
               </Button>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── Paybill / Till Deposit ────────────────────────── */}
+      {showDeposit && (
+        <div className="bg-card border-2 border-green-600/10 rounded-2xl p-5 space-y-3">
+          <div className="flex items-center gap-2 mb-1">
+            <Building2 className="w-5 h-5 text-green-700" />
+            <h4 className="font-semibold text-sm">Or Deposit via Paybill</h4>
+          </div>
+          <div className="bg-green-600/5 border border-green-600/20 rounded-xl p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Paybill Number</span>
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-lg tracking-widest">174379</span>
+                <button onClick={() => { navigator.clipboard.writeText('174379'); sonnerToast.success('Copied!'); }} className="p-1 hover:bg-muted rounded">
+                  <Copy className="w-3.5 h-3.5 text-muted-foreground" />
+                </button>
+              </div>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Account Number</span>
+              <div className="flex items-center gap-2">
+                <span className="font-bold">{user?.id?.slice(0, 8).toUpperCase() || 'WALLET'}</span>
+                <button onClick={() => { navigator.clipboard.writeText(user?.id?.slice(0,8).toUpperCase() || 'WALLET'); sonnerToast.success('Copied!'); }} className="p-1 hover:bg-muted rounded">
+                  <Copy className="w-3.5 h-3.5 text-muted-foreground" />
+                </button>
+              </div>
+            </div>
+          </div>
+          <div className="flex items-start gap-2 text-xs text-muted-foreground">
+            <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+            <span>Go to M-Pesa → Lipa na M-Pesa → Pay Bill → enter the numbers above. Funds will credit within 5 minutes.</span>
+          </div>
         </div>
       )}
 

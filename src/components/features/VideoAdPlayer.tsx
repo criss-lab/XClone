@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { X, Volume2, VolumeX } from 'lucide-react';
-import { AdMob } from '@capacitor-community/admob';
+import { showInterstitial, showRewarded, ADMOB_CONFIG } from '@/lib/admob';
 
 interface VideoAdPlayerProps {
   videoUrl: string;
@@ -134,29 +134,8 @@ export function VideoAdPlayer({
     onAdComplete();
   };
 
-  const showAdMobInterstitial = async () => {
-    try {
-      await AdMob.prepareInterstitial({
-        adId: 'ca-app-pub-7234579833875016/7939157898',
-        isTesting: false
-      });
-      await AdMob.showInterstitial();
-    } catch (err) {
-      console.error('Interstitial Ad Error:', err);
-    }
-  };
-
-  const showAdMobRewarded = async () => {
-    try {
-      await AdMob.prepareRewardVideoAd({
-        adId: 'ca-app-pub-7234579833875016/2575150572',
-        isTesting: false
-      });
-      await AdMob.showRewardVideoAd();
-    } catch (err) {
-      console.error('Rewarded Ad Error:', err);
-    }
-  };
+  const showAdMobInterstitial = () => showInterstitial(ADMOB_CONFIG.INTERSTITIAL);
+  const showAdMobRewarded    = () => showRewarded(ADMOB_CONFIG.REWARDED);
 
   if (loading || !adData) return null;
 
