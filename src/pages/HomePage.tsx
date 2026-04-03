@@ -12,6 +12,8 @@ import { Loader2, Sparkles, Hash, MessageCircle, Repeat2, Heart } from 'lucide-r
 import { formatDistanceToNow } from 'date-fns';
 import { formatNumber } from '@/lib/utils';
 import { DynamicAd } from '@/components/features/DynamicAd';
+import { usePageBanner } from '@/hooks/usePageBanner';
+import { ADMOB_CONFIG } from '@/lib/admob';
 import { VideoAdPlayer } from '@/components/features/VideoAdPlayer';
 import { SponsoredPostCard } from '@/components/features/SponsoredPostCard';
 
@@ -33,6 +35,9 @@ export default function HomePage() {
   const [sponsoredPosts, setSponsoredPosts] = useState<any[]>([]);
   const [showVideoAd, setShowVideoAd] = useState(false);
   const [videoAdShown, setVideoAdShown] = useState(false);
+
+  // Home feed banner — bottom, clears nav, shown after 4s so user sees content first
+  usePageBanner({ adId: ADMOB_CONFIG.BANNER_FEED, margin: 64, delay: 4000 });
 
   // --- Initial fetch ---
   useEffect(() => {

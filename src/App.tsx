@@ -7,8 +7,7 @@ import { BottomNav } from '@/components/layout/BottomNav';
 import { FloatingActionButton } from '@/components/layout/FloatingActionButton';
 import { Toaster } from '@/components/ui/toaster';
 import { Toaster as Sonner } from 'sonner';
-import { initAdMob, showBanner, ADMOB_CONFIG } from '@/lib/admob';
-import { BannerAdPosition } from '@capacitor-community/admob';
+import { initAdMob } from '@/lib/admob';
 
 import HomePage from '@/pages/HomePage';
 import ExplorePage from '@/pages/ExplorePage';
@@ -52,35 +51,16 @@ import RevenueAnalytics from '@/pages/RevenueAnalytics';
 import FraudDetection from '@/pages/FraudDetection';
 import AdPerformanceComparison from '@/pages/AdPerformanceComparison';
 import AdminRevenueDashboard from '@/pages/AdminRevenueDashboard';
+import BoostAnalyticsPage from '@/pages/BoostAnalyticsPage';
 
 export default function App() {
   useEffect(() => {
-    // ── Production AdMob Init ──────────────────────────────────────
-    const bootAds = async () => {
-      await initAdMob(); // single global init, no test mode
-
-      // Feed top banner
-      await showBanner(
-        ADMOB_CONFIG.BANNER_FEED,
-        BannerAdPosition.TOP_CENTER,
-        0
-      );
-
-      // Rotate to bottom after 10 s (above bottom nav)
-      setTimeout(async () => {
-        try {
-          const { hideBanner: hide } = await import('@/lib/admob');
-          await hide();
-          await showBanner(
-            ADMOB_CONFIG.BANNER_BOTTOM,
-            BannerAdPosition.BOTTOM_CENTER,
-            80 // above bottom nav
-          );
-        } catch (_) {/* ignore */}
-      }, 10_000);
-    };
-
-    bootAds();
+    /**
+     * Boot AdMob: initialize + preload interstitial & rewarded silently.
+     * NO banner is shown here — individual pages handle their own banners
+     * at the right moment, with proper bottom-nav margin.
+     */
+    initAdMob();
   }, []);
 
   return (
@@ -133,6 +113,7 @@ export default function App() {
               <Route path="/fraud-detection" element={<FraudDetection />} />
               <Route path="/ad-performance" element={<AdPerformanceComparison />} />
               <Route path="/admin/revenue" element={<AdminRevenueDashboard />} />
+              <Route path="/boost-analytics/:postId" element={<BoostAnalyticsPage />} />
             </Routes>
           </main>
 

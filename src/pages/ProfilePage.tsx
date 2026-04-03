@@ -7,6 +7,8 @@ import { PostCard } from '@/components/features/PostCard';
 import { EditProfileDialog } from '@/components/features/EditProfileDialog';
 import { RevenueAnalyticsWidget } from '@/components/features/RevenueAnalyticsWidget';
 import { Calendar, MapPin, Link as LinkIcon, Mail, BadgeCheck, Loader2, ExternalLink, Twitter, Instagram, Linkedin, MessageCircle } from 'lucide-react';
+import { usePageBanner } from '@/hooks/usePageBanner';
+import { ADMOB_CONFIG } from '@/lib/admob';
 import { formatDistanceToNow } from 'date-fns';
 import { formatNumber } from '@/lib/utils';
 import { Post } from '@/types';
@@ -27,6 +29,9 @@ export default function ProfilePage() {
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [followers, setFollowers] = useState<any[]>([]);
   const [following, setFollowing] = useState<any[]>([]);
+
+  // Profile page banner — shown at bottom, above bottom nav, after 2.5s
+  usePageBanner({ adId: ADMOB_CONFIG.BANNER_PROFILE, margin: 64, delay: 2500 });
 
   const tabs = ['Posts', 'Threads', 'Replies', 'Media', 'Likes', 'Followers', 'Following'];
 
