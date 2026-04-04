@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect } from 'react';
 import { TopBar } from '@/components/layout/TopBar';
 import { WalletDashboard } from '@/components/features/WalletDashboard';
 import { showBanner, hideBanner, ADMOB_CONFIG } from '@/lib/admob';

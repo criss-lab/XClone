@@ -52,6 +52,7 @@ import FraudDetection from '@/pages/FraudDetection';
 import AdPerformanceComparison from '@/pages/AdPerformanceComparison';
 import AdminRevenueDashboard from '@/pages/AdminRevenueDashboard';
 import BoostAnalyticsPage from '@/pages/BoostAnalyticsPage';
+import RewardedAdHistory from '@/pages/RewardedAdHistory';
 
 export default function App() {
   useEffect(() => {
@@ -114,6 +115,7 @@ export default function App() {
               <Route path="/ad-performance" element={<AdPerformanceComparison />} />
               <Route path="/admin/revenue" element={<AdminRevenueDashboard />} />
               <Route path="/boost-analytics/:postId" element={<BoostAnalyticsPage />} />
+              <Route path="/rewards" element={<RewardedAdHistory />} />
             </Routes>
           </main>
 

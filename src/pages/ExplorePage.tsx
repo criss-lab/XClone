@@ -7,7 +7,9 @@ import { supabase } from '@/lib/supabase';
 import { TrendingTopic } from '@/types';
 import { PostCard } from '@/components/features/PostCard';
 import { formatNumber } from '@/lib/utils';
-import { AdMob, BannerAdSize, BannerAdPosition } from '@capacitor-community/admob';
+import { usePageBanner } from '@/hooks/usePageBanner';
+import { ADMOB_CONFIG } from '@/lib/admob';
+import { BannerAdPosition } from '@capacitor-community/admob';
 
 export default function ExplorePage() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -20,24 +22,19 @@ export default function ExplorePage() {
 
   const tabs = ['For You', 'Trending', 'News', 'Sports', 'Entertainment'];
 
+  // Explore page banner — ADMOB_CONFIG.BANNER_EXPLORE, positioned above bottom nav
+  usePageBanner({
+    adId: ADMOB_CONFIG.BANNER_EXPLORE,
+    position: BannerAdPosition.BOTTOM_CENTER,
+    margin: 64,
+    delay: 2000,
+  });
+
   useEffect(() => {
     fetchTrending();
     fetchRankedContent();
     fetchTrendingHashtags();
   }, [activeTab]);
-
-  useEffect(() => {
-    // Show bottom banner ad
-    AdMob.showBanner({
-      adId: "ca-app-pub-7234579833875016/8657343194",
-      adSize: BannerAdSize.BANNER,
-      position: BannerAdPosition.BOTTOM_CENTER,
-    });
-
-    return () => {
-      AdMob.hideBanner();
-    };
-  }, []);
 
   const fetchTrending = async () => {
     setLoading(true);
@@ -106,7 +103,7 @@ export default function ExplorePage() {
       : trending.filter((t) => t.category.toLowerCase() === activeTab.toLowerCase()).slice(0, 20);
 
   return (
-    <div className="min-h-screen bg-background pb-20 md:pb-20"> {/* extra padding for banner */}
+    <div className="min-h-screen bg-background pb-20 md:pb-20">
       <TopBar title="Explore" showProfile={false} />
 
       <div className="sticky top-14 z-30 bg-background border-b border-border">

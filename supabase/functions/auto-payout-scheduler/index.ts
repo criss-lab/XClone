@@ -1,217 +1,164 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { corsHeaders } from '../_shared/cors.ts';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
-
+/**
+ * auto-payout-scheduler
+ * Triggered periodically (e.g. via cron) to process scheduled creator payouts.
+ */
 serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
   try {
-    const supabaseClient = createClient(
+    const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Get pending payouts scheduled for today or earlier
-    const { data: pendingPayouts, error: fetchError } = await supabaseClient
-      .from('scheduled_payouts')
-      .select('*')
-      .eq('status', 'pending')
-      .lte('scheduled_for', new Date().toISOString());
+    const now = new Date().toISOString();
 
-    if (fetchError) {
-      throw fetchError;
+    // Fetch all active schedules due for payout
+    const { data: schedules, error: schedError } = await supabaseAdmin
+      .from('payout_schedules')
+      .select('*')
+      .eq('is_active', true)
+      .lte('next_payout_at', now);
+
+    if (schedError) throw new Error(schedError.message);
+    if (!schedules || schedules.length === 0) {
+      return new Response(JSON.stringify({ processed: 0, message: 'No payouts due' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
-    console.log(`Found ${pendingPayouts?.length || 0} pending payouts to process`);
+    let processed = 0;
+    const results: any[] = [];
 
-    const results = {
-      processed: 0,
-      failed: 0,
-      total: pendingPayouts?.length || 0,
-      errors: [] as string[]
-    };
-
-    // Process each payout
-    for (const payout of pendingPayouts || []) {
+    for (const schedule of schedules) {
       try {
-        // Update status to processing
-        await supabaseClient
-          .from('scheduled_payouts')
-          .update({ status: 'processing' })
-          .eq('id', payout.id);
+        // Check available balance
+        const { data: mon } = await supabaseAdmin
+          .from('user_monetization')
+          .select('pending_user_payout')
+          .eq('user_id', schedule.user_id)
+          .single();
 
-        if (payout.payment_method === 'paypal') {
-          // Process PayPal payout
-          const paypalResult = await processPayPalPayout(payout);
-          
-          if (paypalResult.success) {
-            // Mark as completed
-            await supabaseClient
-              .from('scheduled_payouts')
-              .update({
-                status: 'completed',
-                processed_at: new Date().toISOString()
-              })
-              .eq('id', payout.id);
+        const available = mon?.pending_user_payout || 0;
+        const minAmount = schedule.minimum_amount || 5;
 
-            // Add funds back to wallet (they were deducted when scheduled)
-            // Actually, we already deducted, so create completion transaction
-            await supabaseClient
-              .from('wallet_transactions')
-              .insert({
-                wallet_id: (await supabaseClient
-                  .from('user_wallets')
-                  .select('id')
-                  .eq('user_id', payout.user_id)
-                  .single()).data?.id,
-                user_id: payout.user_id,
-                type: 'withdrawal',
-                amount: payout.amount,
-                payment_method: 'paypal',
-                status: 'completed',
-                description: `PayPal payout completed - ${payout.paypal_email}`,
-                metadata: {
-                  payout_id: payout.id,
-                  paypal_transaction_id: paypalResult.transactionId
-                }
-              });
-
-            results.processed++;
-          } else {
-            throw new Error(paypalResult.error);
-          }
-        } else if (payout.payment_method === 'mpesa') {
-          // Process M-Pesa payout
-          const mpesaResult = await processMPesaPayout(payout);
-          
-          if (mpesaResult.success) {
-            await supabaseClient
-              .from('scheduled_payouts')
-              .update({
-                status: 'completed',
-                processed_at: new Date().toISOString()
-              })
-              .eq('id', payout.id);
-
-            results.processed++;
-          } else {
-            throw new Error(mpesaResult.error);
-          }
+        if (available < minAmount) {
+          results.push({ user_id: schedule.user_id, status: 'skipped', reason: 'Below minimum' });
+          continue;
         }
-      } catch (error: any) {
-        console.error(`Payout ${payout.id} failed:`, error);
-        
-        // Mark as failed
-        await supabaseClient
-          .from('scheduled_payouts')
-          .update({
-            status: 'failed',
-            error_message: error.message,
-            processed_at: new Date().toISOString()
-          })
-          .eq('id', payout.id);
 
-        // Return funds to wallet
-        await supabaseClient.rpc('add_to_wallet', {
-          user_id_param: payout.user_id,
-          amount_param: payout.amount,
-          type_param: 'refund',
-          description_param: `Payout failed - ${error.message}`
+        const amountToSend = available;
+        const kesAmount = Math.floor(amountToSend * 130);
+
+        let payoutStatus = 'pending';
+        let payoutError = null;
+
+        if (schedule.payout_method === 'mpesa') {
+          // Trigger M-Pesa B2C
+          const mpesaResp = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/mpesa-b2c-payout`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+            },
+            body: JSON.stringify({
+              phone: schedule.payout_destination,
+              amount: kesAmount,
+              purpose: 'auto_creator_payout',
+            }),
+          });
+          if (!mpesaResp.ok) {
+            payoutError = await mpesaResp.text();
+            payoutStatus = 'failed';
+          }
+        } else {
+          // PayPal — record pending (manual processing)
+          payoutStatus = 'pending';
+        }
+
+        // Record scheduled payout
+        await supabaseAdmin.from('scheduled_payouts').insert({
+          user_id: schedule.user_id,
+          amount: amountToSend,
+          payment_method: schedule.payout_method,
+          mpesa_phone: schedule.payout_method === 'mpesa' ? schedule.payout_destination : null,
+          paypal_email: schedule.payout_method === 'paypal' ? schedule.payout_destination : null,
+          status: payoutStatus,
+          scheduled_for: schedule.next_payout_at,
+          processed_at: payoutStatus !== 'failed' ? now : null,
+          error_message: payoutError,
         });
 
-        results.failed++;
-        results.errors.push(`Payout ${payout.id}: ${error.message}`);
+        if (payoutStatus !== 'failed') {
+          // Deduct from pending_user_payout
+          await supabaseAdmin
+            .from('user_monetization')
+            .update({ pending_user_payout: 0 })
+            .eq('user_id', schedule.user_id);
+        }
+
+        // Update next_payout_at
+        const nextDate = computeNextDate(schedule.frequency);
+        await supabaseAdmin
+          .from('payout_schedules')
+          .update({ last_payout_at: now, next_payout_at: nextDate })
+          .eq('id', schedule.id);
+
+        // Send push notification
+        await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-push-notification`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+          },
+          body: JSON.stringify({
+            user_id: schedule.user_id,
+            title: payoutStatus === 'failed' ? '⚠️ Auto Payout Failed' : '💸 Auto Payout Sent!',
+            body: payoutStatus === 'failed'
+              ? 'Your scheduled payout could not be processed. Please retry manually.'
+              : `$${amountToSend.toFixed(2)} has been sent via ${schedule.payout_method.toUpperCase()}`,
+            data: { route: '/payouts' },
+          }),
+        });
+
+        processed++;
+        results.push({ user_id: schedule.user_id, status: payoutStatus, amount: amountToSend });
+      } catch (err: any) {
+        console.error(`[auto-payout] Error for user ${schedule.user_id}:`, err);
+        results.push({ user_id: schedule.user_id, status: 'error', error: err.message });
       }
     }
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        ...results
-      }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200,
-      }
-    );
-
-  } catch (error: any) {
-    console.error('Auto-payout scheduler error:', error);
-    return new Response(
-      JSON.stringify({
-        success: false,
-        error: error.message
-      }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 500,
-      }
-    );
+    return new Response(JSON.stringify({ processed, total: schedules.length, results }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  } catch (err: any) {
+    return new Response(JSON.stringify({ error: err.message }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
   }
 });
 
-async function processPayPalPayout(payout: any) {
-  try {
-    // Get platform PayPal credentials from settings
-    // In production, you'd call PayPal Payouts API here
-    // const paypalResponse = await fetch('https://api-m.paypal.com/v1/payments/payouts', {
-    //   method: 'POST',
-    //   headers: {
-    //     'Content-Type': 'application/json',
-    //     'Authorization': `Bearer ${accessToken}`
-    //   },
-    //   body: JSON.stringify({
-    //     sender_batch_header: {
-    //       sender_batch_id: payout.id,
-    //       email_subject: 'You have a payout!',
-    //     },
-    //     items: [{
-    //       recipient_type: 'EMAIL',
-    //       amount: {
-    //         value: payout.amount.toString(),
-    //         currency: 'USD'
-    //       },
-    //       receiver: payout.paypal_email,
-    //       note: 'T Social monetization payout',
-    //     }]
-    //   })
-    // });
-
-    // For now, simulate success
-    console.log(`PayPal payout: $${payout.amount} to ${payout.paypal_email}`);
-    
-    return {
-      success: true,
-      transactionId: `PAYPAL_${payout.id.substring(0, 8)}`
-    };
-  } catch (error: any) {
-    return {
-      success: false,
-      error: error.message
-    };
-  }
-}
-
-async function processMPesaPayout(payout: any) {
-  try {
-    // In production, integrate with M-Pesa API
-    console.log(`M-Pesa payout: $${payout.amount} to ${payout.mpesa_phone}`);
-    
-    return {
-      success: true,
-      transactionId: `MPESA_${payout.id.substring(0, 8)}`
-    };
-  } catch (error: any) {
-    return {
-      success: false,
-      error: error.message
-    };
+function computeNextDate(frequency: string): string {
+  const now = new Date();
+  if (frequency === 'weekly') {
+    const d = new Date(now);
+    d.setDate(d.getDate() + 7);
+    d.setHours(9, 0, 0, 0);
+    return d.toISOString();
+  } else if (frequency === 'biweekly') {
+    const d = new Date(now);
+    d.setDate(d.getDate() + 14);
+    d.setHours(9, 0, 0, 0);
+    return d.toISOString();
+  } else {
+    return new Date(now.getFullYear(), now.getMonth() + 1, 1, 9, 0, 0, 0).toISOString();
   }
 }
