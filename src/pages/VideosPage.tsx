@@ -6,6 +6,7 @@ import { Loader2, Gift, X, Zap } from 'lucide-react';
 import { initAdMob, showInterstitial, showRewarded, ADMOB_CONFIG } from '@/lib/admob';
 
 const AD_EVERY_N_VIDEOS = 4; // interstitial frequency
+const PRELOAD_AHEAD = 2;      // number of videos ahead to preload
 
 export default function VideosPage() {
   const [videos, setVideos] = useState<Post[]>([]);
@@ -13,18 +14,21 @@ export default function VideosPage() {
   const [activeIndex, setActiveIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Rewarded ad prompt state
+  // Rewarded ad state
   const [showRewardPrompt, setShowRewardPrompt] = useState(false);
   const [rewardPending, setRewardPending] = useState(false);
   const [rewardMessage, setRewardMessage] = useState('');
   const lastRewardedAt = useRef(0);
 
+  // Preload map for videos
+  const [preloadMap, setPreloadMap] = useState<Record<number, boolean>>({});
+
   useEffect(() => {
     fetchVideos();
-    // AdMob is already initialized in App.tsx — just ensure interstitial ready
     initAdMob();
   }, []);
 
+  // Scroll handling for activeIndex, ads, and preloading
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -34,21 +38,31 @@ export default function VideosPage() {
       if (idx === activeIndex || idx >= videos.length) return;
       setActiveIndex(idx);
 
-      // Interstitial every N videos (non-intrusive: only when scrolling, not first open)
+      // Interstitial ads
       if (idx > 0 && idx % AD_EVERY_N_VIDEOS === 0) {
         showInterstitial(ADMOB_CONFIG.INTERSTITIAL);
       }
 
-      // Offer rewarded ad every 8 videos (with 30s cooldown)
+      // Rewarded ad every 8 videos with 30s cooldown
       if (idx > 0 && idx % 8 === 0 && Date.now() - lastRewardedAt.current > 30_000) {
         setShowRewardPrompt(true);
       }
+
+      // Preload active + next PRELOAD_AHEAD videos
+      setPreloadMap(prev => {
+        const newMap = { ...prev };
+        for (let i = idx; i <= idx + PRELOAD_AHEAD && i < videos.length; i++) {
+          newMap[i] = true;
+        }
+        return newMap;
+      });
     };
 
     container.addEventListener('scroll', handleScroll, { passive: true });
     return () => container.removeEventListener('scroll', handleScroll);
   }, [activeIndex, videos.length]);
 
+  // Fetch videos
   const fetchVideos = async () => {
     try {
       const { data, error } = await supabase
@@ -59,6 +73,13 @@ export default function VideosPage() {
         .limit(30);
       if (error) throw error;
       setVideos(data || []);
+
+      // Initial preloading of first PRELOAD_AHEAD videos
+      const initialPreload: Record<number, boolean> = {};
+      for (let i = 0; i < PRELOAD_AHEAD + 1 && i < (data?.length || 0); i++) {
+        initialPreload[i] = true;
+      }
+      setPreloadMap(initialPreload);
     } catch (error) {
       console.error('Error fetching videos:', error);
     } finally {
@@ -66,6 +87,7 @@ export default function VideosPage() {
     }
   };
 
+  // Rewarded ad handler
   const handleWatchRewardedAd = async () => {
     setRewardPending(true);
     try {
@@ -73,9 +95,8 @@ export default function VideosPage() {
       if (reward) {
         lastRewardedAt.current = Date.now();
         setRewardMessage('🎉 You unlocked 2× reach boost on your next post!');
-        // Track reward in DB for the current user (non-blocking)
         supabase.from('user_analytics').upsert(
-          { user_id: undefined, post_impressions: 0 }, // placeholder — handled server side
+          { user_id: undefined, post_impressions: 0 },
           { onConflict: 'user_id' }
         ).then(() => {});
         setTimeout(() => {
@@ -122,11 +143,12 @@ export default function VideosPage() {
             post={video}
             isActive={index === activeIndex}
             onUpdate={fetchVideos}
+            shouldPreload={!!preloadMap[index]}
           />
         ))}
       </div>
 
-      {/* ── Rewarded Ad Prompt — slides up from bottom above bottom nav ── */}
+      {/* Rewarded Ad Prompt */}
       {showRewardPrompt && !rewardMessage && (
         <div className="absolute bottom-20 left-0 right-0 mx-4 z-50 animate-slide-in">
           <div className="bg-black/85 backdrop-blur-md border border-white/20 rounded-2xl p-4 flex items-center gap-4">
@@ -158,7 +180,7 @@ export default function VideosPage() {
         </div>
       )}
 
-      {/* ── Reward success toast ── */}
+      {/* Reward success toast */}
       {rewardMessage && (
         <div className="absolute bottom-24 left-4 right-4 z-50">
           <div className="bg-gradient-to-r from-amber-400 to-orange-500 text-black font-bold text-sm px-5 py-3.5 rounded-2xl text-center shadow-lg">
