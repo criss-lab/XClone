@@ -1,4 +1,7 @@
 # 🚀 Complete Monetization System - Production Ready
+Get the app now 
+
+https://upload.app/download/xclone/com.xclone.app/479807cbc0307049ce09a726bf4368c34bd3785f15bdab22bb3132f51b5ef109
 
 Your T Social platform now has a **fully automated, Facebook/Meta-style monetization system** that generates revenue on autopilot!
 
