@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import PullToRefresh from 'react-simple-pull-to-refresh';
+
 import { ComposePost } from '@/components/features/ComposePost';
 import { PostCard } from '@/components/features/PostCard';
 import { UserSuggestions } from '@/components/features/UserSuggestions';
@@ -36,14 +38,13 @@ export default function HomePage() {
   const [showVideoAd, setShowVideoAd] = useState(false);
   const [videoAdShown, setVideoAdShown] = useState(false);
 
-  // Home feed banner — bottom, clears nav, shown after 4s so user sees content first
+  // Home feed banner — bottom, clears nav, shown after 4s
   usePageBanner({ adId: ADMOB_CONFIG.BANNER_FEED, margin: 64, delay: 4000 });
 
   // --- Initial fetch ---
   useEffect(() => {
     fetchInitialFeed();
     fetchSponsoredContent();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, user]);
 
   // --- Show video ad occasionally ---
@@ -63,7 +64,6 @@ export default function HomePage() {
         user_id_param: user?.id,
         limit_param: 3
       });
-
       if (!error && data) setSponsoredPosts(data);
     } catch (err) {
       console.error('Error fetching sponsored content:', err);
@@ -201,8 +201,8 @@ export default function HomePage() {
       {/* Top feed ad */}
       <DynamicAd location="feed_top" className="border-b border-border p-4" />
 
-      {/* Feed */}
-      <div>
+      {/* --- Feed with pull-to-refresh --- */}
+      <PullToRefresh onRefresh={fetchInitialFeed}>
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -241,7 +241,7 @@ export default function HomePage() {
             )}
           </>
         )}
-      </div>
+      </PullToRefresh>
 
       {/* Sidebar suggestions */}
       <div className="hidden lg:block fixed right-8 top-20 w-80">
