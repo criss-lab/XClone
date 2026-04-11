@@ -10,6 +10,19 @@ android {
 apply from: "../capacitor-cordova-android-plugins/cordova.variables.gradle"
 dependencies {
     implementation project(':capacitor-community-admob')
+<<<<<<< HEAD
+=======
+    implementation project(':capacitor-community-firebase-analytics')
+    implementation project(':capacitor-community-media')
+    implementation project(':capacitor-app')
+    implementation project(':capacitor-device')
+    implementation project(':capacitor-filesystem')
+    implementation project(':capacitor-network')
+    implementation project(':capacitor-push-notifications')
+    implementation project(':capacitor-share')
+    implementation project(':capacitor-voice-recorder')
+    implementation project(':cordova-plugin-audioinput')
+>>>>>>> 4d126fe (fix: added missing dependency)
 
 }
 
