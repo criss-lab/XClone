@@ -71,7 +71,6 @@
     "@uppy/tus": "^5.1.1",
     "axios": "^1.13.6",
     "axios-retry": "^4.5.0",
-    "capacitor-voice-recorder": "^1.1.1",
     "chart.js": "^4.5.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
