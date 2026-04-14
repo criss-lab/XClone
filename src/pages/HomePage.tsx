@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import PullToRefresh from 'react-simple-pull-to-refresh';
 
 import { ComposePost } from '@/components/features/ComposePost';
 import { PostCard } from '@/components/features/PostCard';
