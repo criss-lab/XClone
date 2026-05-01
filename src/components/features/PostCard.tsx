@@ -1,4 +1,5 @@
 import { Heart, MessageCircle, Repeat2, Share, MoreHorizontal, BadgeCheck, Trash2, TrendingUp } from 'lucide-react';
+import { sendActivityNotification } from '@/components/layout/AuthProvider';
 import { Post } from '@/types';
 import { formatDistanceToNow } from 'date-fns';
 import { useState, useEffect } from 'react';
@@ -133,6 +134,13 @@ export function PostCard({ post, onUpdate }: PostCardProps) {
             from_user_id: user.id,
             post_id: post.id,
           });
+          // Send push notification
+          sendActivityNotification({
+            recipientUserId: post.user_id,
+            title: 'New Like',
+            body: `${user.username} liked your post`,
+            data: { route: `/post/${post.id}`, type: 'like' }
+          });
         }
       } else {
         const { error: deleteError } = await supabase
@@ -197,6 +205,12 @@ export function PostCard({ post, onUpdate }: PostCardProps) {
             type: 'repost',
             from_user_id: user.id,
             post_id: post.id,
+          });
+          sendActivityNotification({
+            recipientUserId: post.user_id,
+            title: 'New Repost',
+            body: `${user.username} reposted your post`,
+            data: { route: `/post/${post.id}`, type: 'repost' }
           });
         }
         

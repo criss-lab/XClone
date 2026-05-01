@@ -2,51 +2,50 @@ import { useState, useEffect } from 'react';
 import { Moon, Sun } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-export function ThemeToggle() {
-  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-    // Initialize from localStorage or system preference
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('theme') as 'light' | 'dark' | null;
-      if (stored) return stored;
-      
-      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-    }
-    return 'dark';
-  });
+/** Reads the current theme from localStorage / system preference */
+function getInitialTheme(): 'light' | 'dark' {
+  if (typeof window === 'undefined') return 'dark';
+  const stored = localStorage.getItem('theme') as 'light' | 'dark' | null;
+  if (stored === 'light' || stored === 'dark') return stored;
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
 
+/** Applies the theme class to <html> and updates localStorage */
+export function applyTheme(theme: 'light' | 'dark') {
+  const root = document.documentElement;
+  root.classList.remove('light', 'dark');
+  root.classList.add(theme);
+  root.style.colorScheme = theme;
+  localStorage.setItem('theme', theme);
+}
+
+export function ThemeToggle() {
+  const [theme, setTheme] = useState<'light' | 'dark'>(getInitialTheme);
+
+  // Apply on mount
   useEffect(() => {
-    // Apply theme on mount and when it changes
-    const root = document.documentElement;
-    
-    // Remove both classes first
-    root.classList.remove('light', 'dark');
-    
-    // Add the current theme class
-    root.classList.add(theme);
-    
-    // Set color-scheme for native elements
-    root.style.colorScheme = theme;
-    
-    // Save to localStorage
-    localStorage.setItem('theme', theme);
+    applyTheme(theme);
   }, [theme]);
 
-  const toggleTheme = () => {
-    setTheme(prev => prev === 'light' ? 'dark' : 'light');
+  const toggle = () => {
+    const next = theme === 'light' ? 'dark' : 'light';
+    setTheme(next);
+    applyTheme(next);
   };
 
   return (
     <Button
       variant="ghost"
       size="icon"
-      onClick={toggleTheme}
+      onClick={toggle}
       className="rounded-full w-10 h-10"
       title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
+      aria-label="Toggle theme"
     >
-      {theme === 'light' ? (
-        <Moon className="w-5 h-5" />
+      {theme === 'dark' ? (
+        <Sun className="w-5 h-5 text-yellow-400" />
       ) : (
-        <Sun className="w-5 h-5" />
+        <Moon className="w-5 h-5 text-slate-600" />
       )}
     </Button>
   );

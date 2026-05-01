@@ -3,9 +3,14 @@ import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { TopBar } from '@/components/layout/TopBar';
-import { DollarSign, TrendingUp, Users, BarChart3, Eye, Loader2, ExternalLink } from 'lucide-react';
+import {
+  DollarSign, TrendingUp, Users, BarChart3, Eye,
+  Loader2, ExternalLink, Lock, CheckCircle2, XCircle, Star
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { formatNumber } from '@/lib/utils';
+
+const MONETIZATION_THRESHOLD = 1000; // subscribers required
 
 export function MonetizationDashboard() {
   const { user } = useAuth();
@@ -21,64 +26,35 @@ export function MonetizationDashboard() {
   const [earnings, setEarnings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [monetizationStatus, setMonetizationStatus] = useState<any>(null);
+  const [userProfile, setUserProfile] = useState<any>(null);
 
   useEffect(() => {
-    if (!user) {
-      navigate('/auth');
-      return;
-    }
-    fetchMonetizationData();
+    if (!user) { navigate('/auth'); return; }
+    fetchAll();
   }, [user]);
 
-  const fetchMonetizationData = async () => {
+  const fetchAll = async () => {
     if (!user) return;
-
     try {
-      // Check monetization status
-      const { data: monData } = await supabase
-        .from('user_monetization')
-        .select('*')
-        .eq('user_id', user.id)
-        .single();
+      const [monRes, profileRes, earningsRes, subsRes, tipsRes, videosRes] = await Promise.all([
+        supabase.from('user_monetization').select('*').eq('user_id', user.id).maybeSingle(),
+        supabase.from('user_profiles').select('subscriber_count, followers_count, is_creator, can_monetize').eq('id', user.id).single(),
+        supabase.from('creator_earnings').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
+        supabase.from('creator_subscriptions').select('*').eq('creator_id', user.id).eq('status', 'active'),
+        supabase.from('tips').select('*').eq('to_user_id', user.id),
+        supabase.from('posts').select('views_count').eq('user_id', user.id).eq('is_video', true),
+      ]);
 
-      setMonetizationStatus(monData);
+      setMonetizationStatus(monRes.data);
+      setUserProfile(profileRes.data);
+      setEarnings(earningsRes.data || []);
 
-      // Fetch total earnings
-      const { data: earningsData } = await supabase
-        .from('creator_earnings')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
-
-      const total = earningsData?.reduce((sum, e) => sum + Number(e.amount), 0) || 0;
-      const videoRev = earningsData?.filter(e => e.source === 'video_ads').reduce((sum, e) => sum + Number(e.amount), 0) || 0;
-      const productRev = earningsData?.filter(e => e.source === 'product_sales').reduce((sum, e) => sum + Number(e.amount), 0) || 0;
-
-      // Fetch subscriptions
-      const { data: subsData } = await supabase
-        .from('creator_subscriptions')
-        .select('*')
-        .eq('creator_id', user.id)
-        .eq('status', 'active');
-
-      const subsRevenue = subsData?.reduce((sum, s) => sum + Number(s.price), 0) || 0;
-
-      // Fetch tips
-      const { data: tipsData } = await supabase
-        .from('tips')
-        .select('*')
-        .eq('to_user_id', user.id);
-
-      const tipsRevenue = tipsData?.reduce((sum, t) => sum + Number(t.amount), 0) || 0;
-
-      // Get video views
-      const { data: videoPosts } = await supabase
-        .from('posts')
-        .select('views_count')
-        .eq('user_id', user.id)
-        .eq('is_video', true);
-
-      const totalViews = videoPosts?.reduce((sum, p) => sum + (p.views_count || 0), 0) || 0;
+      const total = (earningsRes.data || []).reduce((s: number, e: any) => s + Number(e.amount), 0);
+      const videoRev = (earningsRes.data || []).filter((e: any) => e.source === 'video_ads').reduce((s: number, e: any) => s + Number(e.amount), 0);
+      const productRev = (earningsRes.data || []).filter((e: any) => e.source === 'product_sales').reduce((s: number, e: any) => s + Number(e.amount), 0);
+      const subsRevenue = (subsRes.data || []).reduce((s: number, e: any) => s + Number(e.price), 0);
+      const tipsRevenue = (tipsRes.data || []).reduce((s: number, e: any) => s + Number(e.amount), 0);
+      const totalViews = (videosRes.data || []).reduce((s: number, e: any) => s + (e.views_count || 0), 0);
 
       setStats({
         totalEarnings: total + subsRevenue + tipsRevenue,
@@ -88,10 +64,8 @@ export function MonetizationDashboard() {
         videoViews: totalViews,
         productSales: productRev
       });
-
-      setEarnings(earningsData || []);
-    } catch (error) {
-      console.error('Error fetching monetization data:', error);
+    } catch (err) {
+      console.error(err);
       toast.error('Failed to load monetization data');
     } finally {
       setLoading(false);
@@ -100,46 +74,31 @@ export function MonetizationDashboard() {
 
   const enableMonetization = async () => {
     if (!user) return;
-
-    try {
-      // Create monetization record
-      const { error: monError } = await supabase
-        .from('user_monetization')
-        .insert({
-          user_id: user.id,
-          is_monetized: true,
-          eligibility_status: 'pending'
-        });
-
-      if (monError && !monError.message.includes('duplicate')) throw monError;
-
-      // Update profile
-      const { error: profileError } = await supabase
-        .from('user_profiles')
-        .update({
-          is_creator: true,
-          can_monetize: true,
-          creator_tier: 'basic'
-        })
-        .eq('id', user.id);
-
-      if (profileError) throw profileError;
-
-      toast.success('Monetization enabled! Start earning from your content.');
-      fetchMonetizationData();
-    } catch (error: any) {
-      console.error('Monetization error:', error);
-      toast.error(error.message || 'Failed to enable monetization');
-    }
-  };
-
-  const requestPayout = async () => {
-    if (stats.totalEarnings < 50) {
-      toast.error('Minimum payout is $50');
+    const subscriberCount = userProfile?.subscriber_count || userProfile?.followers_count || 0;
+    if (subscriberCount < MONETIZATION_THRESHOLD) {
+      toast.error(`You need ${MONETIZATION_THRESHOLD.toLocaleString()} subscribers to monetize`, {
+        description: `You currently have ${subscriberCount.toLocaleString()} subscribers. Keep growing!`
+      });
       return;
     }
 
-    toast.info('Payout request submitted. You will be contacted by admin.');
+    try {
+      const { error: monError } = await supabase
+        .from('user_monetization')
+        .upsert({ user_id: user.id, is_monetized: true, eligibility_status: 'approved' }, { onConflict: 'user_id' });
+
+      if (monError) throw monError;
+
+      await supabase
+        .from('user_profiles')
+        .update({ is_creator: true, can_monetize: true, creator_tier: 'basic' })
+        .eq('id', user.id);
+
+      toast.success('🎉 Monetization enabled! Start earning from your content.');
+      fetchAll();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to enable monetization');
+    }
   };
 
   if (!user) return null;
@@ -152,167 +111,178 @@ export function MonetizationDashboard() {
     );
   }
 
+  const subscriberCount = userProfile?.subscriber_count || userProfile?.followers_count || 0;
+  const isEligible = subscriberCount >= MONETIZATION_THRESHOLD;
+  const progressPct = Math.min(100, (subscriberCount / MONETIZATION_THRESHOLD) * 100);
+
   return (
     <div className="min-h-screen bg-background pb-16 md:pb-0">
       <TopBar title="Monetization" showBack />
 
-      <div className="max-w-4xl mx-auto p-6">
-        {!monetizationStatus?.is_monetized ? (
-          <div className="bg-gradient-to-r from-primary/10 to-purple-500/10 border border-primary/20 rounded-xl p-8 text-center">
-            <DollarSign className="w-16 h-16 text-primary mx-auto mb-4" />
-            <h2 className="text-2xl font-bold mb-2">Start Earning from Your Content</h2>
-            <p className="text-muted-foreground mb-6">
-              Enable monetization to earn from video ads, subscriptions, tips, and product sales
-            </p>
-            <button
-              onClick={enableMonetization}
-              className="px-8 py-3 bg-primary text-primary-foreground rounded-full font-semibold hover:opacity-90"
-            >
-              Enable Monetization
-            </button>
-          </div>
-        ) : (
-          <>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
-              <div className="bg-gradient-to-br from-primary/10 to-purple-500/10 border border-primary/20 rounded-xl p-6">
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="p-2 bg-primary/20 rounded-lg">
-                    <DollarSign className="w-6 h-6 text-primary" />
-                  </div>
-                  <span className="text-sm font-medium text-muted-foreground">Total Earnings</span>
-                </div>
-                <p className="text-3xl font-bold text-primary">${stats.totalEarnings.toFixed(2)}</p>
-              </div>
+      <div className="max-w-2xl mx-auto p-4 space-y-6">
 
-              <div className="bg-card border border-border rounded-xl p-6">
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="p-2 bg-green-500/10 rounded-lg">
-                    <BarChart3 className="w-5 h-5 text-green-500" />
-                  </div>
-                  <span className="text-sm text-muted-foreground">Video Revenue</span>
-                </div>
-                <p className="text-2xl font-bold">${stats.videoRevenue.toFixed(2)}</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {formatNumber(stats.videoViews)} views
+        {/* Eligibility Banner */}
+        {!monetizationStatus?.is_monetized && (
+          <div className={`border rounded-2xl p-5 ${
+            isEligible
+              ? 'bg-gradient-to-r from-primary/10 to-green-500/10 border-primary/30'
+              : 'bg-card border-border'
+          }`}>
+            <div className="flex items-start gap-3 mb-4">
+              <div className={`w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 ${
+                isEligible ? 'bg-primary text-primary-foreground' : 'bg-muted'
+              }`}>
+                {isEligible ? <CheckCircle2 className="w-6 h-6" /> : <Lock className="w-6 h-6 text-muted-foreground" />}
+              </div>
+              <div>
+                <h2 className="text-lg font-bold">
+                  {isEligible ? '🎉 You\'re eligible to monetize!' : 'Unlock Monetization'}
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  {isEligible
+                    ? 'You\'ve reached 1,000 subscribers. Start earning from your content.'
+                    : `Reach ${MONETIZATION_THRESHOLD.toLocaleString()} subscribers to unlock monetization`}
                 </p>
-              </div>
-
-              <div className="bg-card border border-border rounded-xl p-6">
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="p-2 bg-blue-500/10 rounded-lg">
-                    <Users className="w-5 h-5 text-blue-500" />
-                  </div>
-                  <span className="text-sm text-muted-foreground">Subscriptions</span>
-                </div>
-                <p className="text-2xl font-bold">${stats.subscriptions.toFixed(2)}</p>
-              </div>
-
-              <div className="bg-card border border-border rounded-xl p-6">
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="p-2 bg-purple-500/10 rounded-lg">
-                    <TrendingUp className="w-5 h-5 text-purple-500" />
-                  </div>
-                  <span className="text-sm text-muted-foreground">Tips</span>
-                </div>
-                <p className="text-2xl font-bold">${stats.tips.toFixed(2)}</p>
-              </div>
-
-              <div className="bg-card border border-border rounded-xl p-6">
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="p-2 bg-orange-500/10 rounded-lg">
-                    <ExternalLink className="w-5 h-5 text-orange-500" />
-                  </div>
-                  <span className="text-sm text-muted-foreground">Product Sales</span>
-                </div>
-                <p className="text-2xl font-bold">${stats.productSales.toFixed(2)}</p>
               </div>
             </div>
 
-            <div className="flex gap-4 mb-8">
+            {/* Progress bar */}
+            {!isEligible && (
+              <div className="mb-4">
+                <div className="flex justify-between text-xs text-muted-foreground mb-1.5">
+                  <span>{subscriberCount.toLocaleString()} subscribers</span>
+                  <span>{MONETIZATION_THRESHOLD.toLocaleString()} required</span>
+                </div>
+                <div className="h-2.5 bg-muted rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-primary to-green-500 rounded-full transition-all duration-500"
+                    style={{ width: `${progressPct}%` }}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground mt-1.5 text-right">
+                  {Math.max(0, MONETIZATION_THRESHOLD - subscriberCount).toLocaleString()} more needed
+                </p>
+              </div>
+            )}
+
+            {/* Requirements checklist */}
+            <div className="space-y-2 mb-4">
+              {[
+                { label: '1,000+ subscribers/followers', met: isEligible },
+                { label: 'Active account in good standing', met: true },
+                { label: 'Post original content', met: true },
+              ].map((req, i) => (
+                <div key={i} className="flex items-center gap-2 text-sm">
+                  {req.met ? (
+                    <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />
+                  ) : (
+                    <XCircle className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                  )}
+                  <span className={req.met ? 'text-foreground' : 'text-muted-foreground'}>{req.label}</span>
+                </div>
+              ))}
+            </div>
+
+            <button
+              onClick={enableMonetization}
+              disabled={!isEligible}
+              className={`w-full py-3 rounded-full font-semibold transition-all ${
+                isEligible
+                  ? 'bg-primary text-primary-foreground hover:opacity-90'
+                  : 'bg-muted text-muted-foreground cursor-not-allowed'
+              }`}
+            >
+              {isEligible ? 'Enable Monetization' : `Need ${(MONETIZATION_THRESHOLD - subscriberCount).toLocaleString()} more subscribers`}
+            </button>
+          </div>
+        )}
+
+        {monetizationStatus?.is_monetized && (
+          <>
+            {/* Stats Grid */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2 bg-gradient-to-br from-primary/10 to-purple-500/10 border border-primary/20 rounded-2xl p-5">
+                <div className="flex items-center gap-2 mb-1">
+                  <DollarSign className="w-5 h-5 text-primary" />
+                  <span className="text-sm text-muted-foreground font-medium">Total Earnings</span>
+                </div>
+                <p className="text-4xl font-bold text-primary">${stats.totalEarnings.toFixed(2)}</p>
+                <div className="flex items-center gap-1.5 mt-2">
+                  <Star className="w-3.5 h-3.5 text-yellow-500" />
+                  <span className="text-xs text-muted-foreground">Creator since {new Date(monetizationStatus.created_at).toLocaleDateString()}</span>
+                </div>
+              </div>
+
+              {[
+                { label: 'Video Revenue', value: stats.videoRevenue, sub: `${formatNumber(stats.videoViews)} views`, icon: BarChart3, color: 'text-green-500' },
+                { label: 'Subscriptions', value: stats.subscriptions, sub: 'monthly', icon: Users, color: 'text-blue-500' },
+                { label: 'Tips', value: stats.tips, sub: 'received', icon: TrendingUp, color: 'text-purple-500' },
+                { label: 'Product Sales', value: stats.productSales, sub: 'total', icon: ExternalLink, color: 'text-orange-500' },
+              ].map((stat, i) => (
+                <div key={i} className="bg-card border border-border rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-1">
+                    <stat.icon className={`w-4 h-4 ${stat.color}`} />
+                    <span className="text-xs text-muted-foreground">{stat.label}</span>
+                  </div>
+                  <p className="text-xl font-bold">${stat.value.toFixed(2)}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{stat.sub}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-3">
               <button
-                onClick={requestPayout}
-                disabled={stats.totalEarnings < 50}
-                className="flex-1 py-3 bg-primary text-primary-foreground rounded-lg font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={() => navigate('/payouts')}
+                className="flex-1 py-3 bg-primary text-primary-foreground rounded-xl font-semibold hover:opacity-90 transition-opacity"
               >
-                Request Payout (Min. $50)
+                Request Payout
               </button>
               <button
                 onClick={() => navigate('/creator-studio')}
-                className="flex-1 py-3 border border-border rounded-lg font-semibold hover:bg-muted transition-colors"
+                className="flex-1 py-3 border border-border rounded-xl font-semibold hover:bg-muted transition-colors"
               >
                 Creator Studio
               </button>
             </div>
 
-            <div className="bg-card border border-border rounded-xl p-6 mb-6">
-              <h2 className="text-xl font-bold mb-4">Recent Earnings</h2>
+            {/* Recent Earnings */}
+            <div className="bg-card border border-border rounded-2xl p-4">
+              <h2 className="font-bold mb-3">Recent Earnings</h2>
               {earnings.length === 0 ? (
-                <p className="text-center text-muted-foreground py-8">No earnings yet</p>
+                <p className="text-center text-muted-foreground py-6 text-sm">No earnings yet</p>
               ) : (
-                <div className="space-y-3">
-                  {earnings.slice(0, 10).map((earning) => (
-                    <div key={earning.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg hover:bg-muted transition-colors">
+                <div className="space-y-2">
+                  {earnings.slice(0, 8).map(earning => (
+                    <div key={earning.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
                       <div>
-                        <p className="font-medium capitalize">{earning.source.replace(/_/g, ' ')}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {new Date(earning.created_at).toLocaleDateString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                            year: 'numeric'
-                          })}
-                        </p>
+                        <p className="font-medium text-sm capitalize">{earning.source.replace(/_/g, ' ')}</p>
+                        <p className="text-xs text-muted-foreground">{new Date(earning.created_at).toLocaleDateString()}</p>
                       </div>
-                      <div className="text-right">
-                        <p className="text-lg font-bold text-green-600">+${Number(earning.amount).toFixed(2)}</p>
-                        <p className="text-xs text-muted-foreground capitalize">{earning.status}</p>
-                      </div>
+                      <p className="font-bold text-green-600">+${Number(earning.amount).toFixed(2)}</p>
                     </div>
                   ))}
                 </div>
               )}
             </div>
-
-            <div className="grid md:grid-cols-2 gap-6">
-              <div className="bg-gradient-to-br from-primary/5 to-purple-500/5 border border-primary/20 rounded-xl p-6">
-                <h3 className="font-bold mb-3 flex items-center gap-2">
-                  <TrendingUp className="w-5 h-5 text-primary" />
-                  Maximize Your Earnings
-                </h3>
-                <ul className="space-y-2 text-sm text-muted-foreground">
-                  <li>• Upload engaging videos to earn from ads</li>
-                  <li>• Offer exclusive content to subscribers</li>
-                  <li>• Enable tips on your posts</li>
-                  <li>• Tag products to earn commissions</li>
-                  <li>• Engage with your audience regularly</li>
-                </ul>
-              </div>
-
-              <div className="bg-card border border-border rounded-xl p-6">
-                <h3 className="font-bold mb-3">Eligibility Status</h3>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm">Monetization</span>
-                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                      monetizationStatus?.is_monetized 
-                        ? 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400'
-                        : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400'
-                    }`}>
-                      {monetizationStatus?.is_monetized ? 'Enabled' : 'Disabled'}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm">Revenue Share</span>
-                    <span className="text-sm font-medium">{monetizationStatus?.revenue_share_percentage || 0}%</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm">Total Lifetime Earnings</span>
-                    <span className="text-sm font-medium">${Number(monetizationStatus?.total_earnings || 0).toFixed(2)}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
           </>
         )}
+
+        {/* Tips to grow */}
+        <div className="bg-gradient-to-br from-primary/5 to-purple-500/5 border border-primary/20 rounded-2xl p-5">
+          <h3 className="font-bold mb-3 flex items-center gap-2">
+            <TrendingUp className="w-5 h-5 text-primary" />
+            Grow Your Subscribers
+          </h3>
+          <ul className="space-y-2 text-sm text-muted-foreground">
+            <li>• Post consistently — at least once per day</li>
+            <li>• Upload engaging short videos (TikTok-style)</li>
+            <li>• Use trending hashtags in your posts</li>
+            <li>• Engage with comments on your posts</li>
+            <li>• Collaborate with other creators</li>
+            <li>• Host audio Spaces to attract followers</li>
+          </ul>
+        </div>
       </div>
     </div>
   );

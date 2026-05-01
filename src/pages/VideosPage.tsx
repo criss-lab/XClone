@@ -1,18 +1,27 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { VideoPlayer } from '@/components/features/VideoPlayer';
 import { supabase } from '@/lib/supabase';
 import { Post } from '@/types';
-import { Loader2, Gift, X, Zap } from 'lucide-react';
+import { Loader2, Gift, X, Zap, Play, TrendingUp } from 'lucide-react';
 import { initAdMob, showInterstitial, showRewarded, ADMOB_CONFIG } from '@/lib/admob';
+import { useAuth } from '@/hooks/useAuth';
+import { useNavigate } from 'react-router-dom';
 
-const AD_EVERY_N_VIDEOS = 4; // interstitial frequency
-const PRELOAD_AHEAD = 2;      // number of videos ahead to preload
+const AD_EVERY_N_VIDEOS = 4;
+const PRELOAD_AHEAD = 2;
+const PAGE_SIZE = 20;
 
 export default function VideosPage() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
   const [videos, setVideos] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
+  const activeIndexRef = useRef(0);
+  const lastScrollTop = useRef(0);
 
   // Rewarded ad state
   const [showRewardPrompt, setShowRewardPrompt] = useState(false);
@@ -20,74 +29,101 @@ export default function VideosPage() {
   const [rewardMessage, setRewardMessage] = useState('');
   const lastRewardedAt = useRef(0);
 
-  // Preload map for videos
+  // Preload map: index → shouldPreload
   const [preloadMap, setPreloadMap] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
-    fetchVideos();
+    fetchVideos(0);
     initAdMob();
   }, []);
 
-  // Scroll handling for activeIndex, ads, and preloading
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    const handleScroll = () => {
-      const idx = Math.round(container.scrollTop / window.innerHeight);
-      if (idx === activeIndex || idx >= videos.length) return;
-      setActiveIndex(idx);
-
-      // Interstitial ads
-      if (idx > 0 && idx % AD_EVERY_N_VIDEOS === 0) {
-        showInterstitial(ADMOB_CONFIG.INTERSTITIAL);
-      }
-
-      // Rewarded ad every 8 videos with 30s cooldown
-      if (idx > 0 && idx % 8 === 0 && Date.now() - lastRewardedAt.current > 30_000) {
-        setShowRewardPrompt(true);
-      }
-
-      // Preload active + next PRELOAD_AHEAD videos
-      setPreloadMap(prev => {
-        const newMap = { ...prev };
-        for (let i = idx; i <= idx + PRELOAD_AHEAD && i < videos.length; i++) {
-          newMap[i] = true;
-        }
-        return newMap;
-      });
-    };
-
-    container.addEventListener('scroll', handleScroll, { passive: true });
-    return () => container.removeEventListener('scroll', handleScroll);
-  }, [activeIndex, videos.length]);
-
-  // Fetch videos
-  const fetchVideos = async () => {
+  const fetchVideos = async (pageNum: number) => {
     try {
+      // Mix new + old: order by views & created_at for variety
       const { data, error } = await supabase
         .from('posts')
         .select('*, user_profiles (*)')
         .eq('is_video', true)
         .order('created_at', { ascending: false })
-        .limit(30);
-      if (error) throw error;
-      setVideos(data || []);
+        .range(pageNum * PAGE_SIZE, (pageNum + 1) * PAGE_SIZE - 1);
 
-      // Initial preloading of first PRELOAD_AHEAD videos
-      const initialPreload: Record<number, boolean> = {};
-      for (let i = 0; i < PRELOAD_AHEAD + 1 && i < (data?.length || 0); i++) {
-        initialPreload[i] = true;
+      if (error) throw error;
+
+      const newVideos = data || [];
+      if (newVideos.length < PAGE_SIZE) setHasMore(false);
+
+      if (pageNum === 0) {
+        setVideos(newVideos);
+        // Preload first 3
+        const init: Record<number, boolean> = {};
+        for (let i = 0; i < Math.min(3, newVideos.length); i++) init[i] = true;
+        setPreloadMap(init);
+      } else {
+        setVideos(prev => {
+          const combined = [...prev, ...newVideos];
+          return combined;
+        });
       }
-      setPreloadMap(initialPreload);
-    } catch (error) {
-      console.error('Error fetching videos:', error);
+      setPage(pageNum);
+    } catch (err) {
+      console.error('fetchVideos error:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  // Rewarded ad handler
+  // Throttled scroll handler using requestAnimationFrame
+  const ticking = useRef(false);
+  const handleScroll = useCallback(() => {
+    if (ticking.current) return;
+    ticking.current = true;
+
+    requestAnimationFrame(() => {
+      const container = containerRef.current;
+      if (!container) { ticking.current = false; return; }
+
+      const viewportH = window.innerHeight;
+      const idx = Math.round(container.scrollTop / viewportH);
+
+      if (idx !== activeIndexRef.current && idx < videos.length) {
+        activeIndexRef.current = idx;
+        setActiveIndex(idx);
+
+        // Preload ahead
+        setPreloadMap(prev => {
+          const map = { ...prev };
+          for (let i = idx; i <= idx + PRELOAD_AHEAD && i < videos.length; i++) {
+            map[i] = true;
+          }
+          return map;
+        });
+
+        // Interstitial ad
+        if (idx > 0 && idx % AD_EVERY_N_VIDEOS === 0) {
+          showInterstitial(ADMOB_CONFIG.INTERSTITIAL);
+        }
+
+        // Rewarded ad prompt
+        if (idx > 0 && idx % 8 === 0 && Date.now() - lastRewardedAt.current > 30_000) {
+          setShowRewardPrompt(true);
+        }
+
+        // Load more pages
+        if (idx >= videos.length - 3 && hasMore) {
+          fetchVideos(page + 1);
+        }
+      }
+      ticking.current = false;
+    });
+  }, [videos.length, hasMore, page]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    container.addEventListener('scroll', handleScroll, { passive: true });
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, [handleScroll]);
+
   const handleWatchRewardedAd = async () => {
     setRewardPending(true);
     try {
@@ -95,14 +131,7 @@ export default function VideosPage() {
       if (reward) {
         lastRewardedAt.current = Date.now();
         setRewardMessage('🎉 You unlocked 2× reach boost on your next post!');
-        supabase.from('user_analytics').upsert(
-          { user_id: undefined, post_impressions: 0 },
-          { onConflict: 'user_id' }
-        ).then(() => {});
-        setTimeout(() => {
-          setShowRewardPrompt(false);
-          setRewardMessage('');
-        }, 3500);
+        setTimeout(() => { setShowRewardPrompt(false); setRewardMessage(''); }, 3500);
       } else {
         setShowRewardPrompt(false);
       }
@@ -121,36 +150,75 @@ export default function VideosPage() {
 
   if (videos.length === 0) {
     return (
-      <div className="h-screen flex items-center justify-center bg-black text-white">
-        <div className="text-center">
-          <p className="text-xl font-bold mb-2">No videos yet</p>
-          <p className="text-white/60">Be the first to post a video!</p>
+      <div className="h-screen flex flex-col items-center justify-center bg-black text-white gap-4">
+        <div className="w-20 h-20 bg-white/10 rounded-full flex items-center justify-center">
+          <Play className="w-10 h-10" />
         </div>
+        <p className="text-xl font-bold">No videos yet</p>
+        <p className="text-white/60 text-center px-8">Be the first to share a video!</p>
+        <button
+          onClick={() => navigate('/')}
+          className="mt-2 px-6 py-2 bg-white/10 rounded-full text-sm font-medium hover:bg-white/20 transition-colors"
+        >
+          Go to Home Feed
+        </button>
       </div>
     );
   }
 
   return (
-    <div className="relative">
+    <div className="relative bg-black" style={{ height: '100svh' }}>
+      {/* TikTok-style vertical scroll feed */}
       <div
         ref={containerRef}
-        className="h-screen w-full max-w-full overflow-x-hidden overflow-y-scroll snap-y snap-mandatory"
-        style={{ scrollBehavior: 'smooth' }}
+        className="video-feed-container w-full"
+        style={{
+          height: '100svh',
+          overflowY: 'scroll',
+          scrollSnapType: 'y mandatory',
+          WebkitOverflowScrolling: 'touch',
+        }}
       >
         {videos.map((video, index) => (
-          <VideoPlayer
+          <div
             key={video.id}
-            post={video}
-            isActive={index === activeIndex}
-            onUpdate={fetchVideos}
-            shouldPreload={!!preloadMap[index]}
-          />
+            className="video-feed-item"
+            style={{
+              height: '100svh',
+              scrollSnapAlign: 'start',
+              scrollSnapStop: 'always',
+              position: 'relative',
+            }}
+          >
+            <VideoPlayer
+              post={video}
+              isActive={index === activeIndex}
+              onUpdate={() => fetchVideos(0)}
+              shouldPreload={!!preloadMap[index]}
+            />
+          </div>
         ))}
+
+        {/* Loading more indicator */}
+        {hasMore && (
+          <div className="flex items-center justify-center py-8 bg-black">
+            <Loader2 className="w-6 h-6 animate-spin text-white/40" />
+          </div>
+        )}
+      </div>
+
+      {/* Video index indicator */}
+      <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
+        <div className="bg-black/40 backdrop-blur-sm rounded-full px-3 py-1">
+          <p className="text-white/70 text-xs font-medium">
+            {activeIndex + 1} / {videos.length}{hasMore ? '+' : ''}
+          </p>
+        </div>
       </div>
 
       {/* Rewarded Ad Prompt */}
       {showRewardPrompt && !rewardMessage && (
-        <div className="absolute bottom-20 left-0 right-0 mx-4 z-50 animate-slide-in">
+        <div className="absolute bottom-24 left-4 right-4 z-50 animate-slide-in">
           <div className="bg-black/85 backdrop-blur-md border border-white/20 rounded-2xl p-4 flex items-center gap-4">
             <div className="w-12 h-12 bg-gradient-to-br from-amber-400 to-orange-500 rounded-xl flex items-center justify-center shrink-0">
               <Gift className="w-6 h-6 text-white" />
@@ -163,7 +231,6 @@ export default function VideosPage() {
               <button
                 onClick={() => setShowRewardPrompt(false)}
                 className="p-2 text-white/60 hover:text-white"
-                aria-label="Dismiss"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -182,7 +249,7 @@ export default function VideosPage() {
 
       {/* Reward success toast */}
       {rewardMessage && (
-        <div className="absolute bottom-24 left-4 right-4 z-50">
+        <div className="absolute bottom-28 left-4 right-4 z-50">
           <div className="bg-gradient-to-r from-amber-400 to-orange-500 text-black font-bold text-sm px-5 py-3.5 rounded-2xl text-center shadow-lg">
             {rewardMessage}
           </div>

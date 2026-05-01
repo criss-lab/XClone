@@ -1,127 +1,104 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { corsHeaders } from '../_shared/cors.ts';
+import { Deno } from "https://deno.land/std@0.168.0/node/module.ts";
+// @ts-ignore
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+// @ts-ignore
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { corsHeaders } from "../_shared/cors.ts";
 
-/**
- * Edge Function: send-push-notification
- * Sends FCM push notifications to one or multiple users.
- *
- * Body params:
- *   user_id?      - single recipient user UUID
- *   user_ids?     - array of recipient user UUIDs
- *   title         - notification title
- *   body          - notification body
- *   data?         - optional key-value payload
- *   image?        - optional image URL
- */
-serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+serve(async (req: Request) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
   }
 
   try {
     const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    const { user_id, user_ids, title, body, data = {}, image } = await req.json();
+    const body = await req.json();
+    const { user_id, title, body: notifBody, data = {} } = body;
 
-    const targetUserIds: string[] = user_ids ?? (user_id ? [user_id] : []);
-    if (targetUserIds.length === 0) {
-      return new Response(JSON.stringify({ error: 'No target users specified' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+    if (!user_id || !title || !notifBody) {
+      return new Response(
+        JSON.stringify({ error: "Missing user_id, title, or body" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
-    // Fetch FCM tokens for all target users
-    const { data: tokenRows, error: tokenError } = await supabaseAdmin
-      .from('fcm_tokens')
-      .select('token, user_id')
-      .in('user_id', targetUserIds);
+    // Get all FCM tokens for this user
+    const { data: tokens, error: tokenError } = await supabaseAdmin
+      .from("fcm_tokens")
+      .select("token, platform")
+      .eq("user_id", user_id);
 
-    if (tokenError) throw new Error(`DB error: ${tokenError.message}`);
-    if (!tokenRows || tokenRows.length === 0) {
-      return new Response(JSON.stringify({ sent: 0, message: 'No FCM tokens found' }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+    if (tokenError) throw tokenError;
+    if (!tokens || tokens.length === 0) {
+      return new Response(
+        JSON.stringify({ message: "No FCM tokens found for user" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
-    const FIREBASE_SERVER_KEY = Deno.env.get('FIREBASE_SERVER_KEY');
-    if (!FIREBASE_SERVER_KEY) throw new Error('FIREBASE_SERVER_KEY not configured');
-
-    const tokens = tokenRows.map(r => r.token);
-
-    // Build FCM payload (legacy HTTP API — supports both single & multi-cast)
-    const fcmPayload = {
-      registration_ids: tokens,
-      notification: {
-        title,
-        body,
-        ...(image ? { image } : {}),
-        sound: 'default',
-        click_action: 'FLUTTER_NOTIFICATION_CLICK',
-      },
-      data: {
-        ...data,
-        click_action: 'FLUTTER_NOTIFICATION_CLICK',
-      },
-      android: {
-        priority: 'high',
-        notification: {
-          channel_id: 'default',
-          notification_priority: 'PRIORITY_HIGH',
-        },
-      },
-    };
-
-    const fcmResponse = await fetch('https://fcm.googleapis.com/fcm/send', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `key=${FIREBASE_SERVER_KEY}`,
-      },
-      body: JSON.stringify(fcmPayload),
-    });
-
-    const fcmResult = await fcmResponse.json();
-    console.log('[FCM] Result:', JSON.stringify(fcmResult));
-
-    if (!fcmResponse.ok) {
-      throw new Error(`FCM error: ${JSON.stringify(fcmResult)}`);
+    const FCM_SERVER_KEY = Deno.env.get("FCM_SERVER_KEY");
+    if (!FCM_SERVER_KEY) {
+      console.warn("[Push] FCM_SERVER_KEY not set — skipping push");
+      return new Response(
+        JSON.stringify({ message: "FCM not configured" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
-    // Remove invalid/unregistered tokens
-    if (fcmResult.results) {
-      const invalidTokens: string[] = [];
-      fcmResult.results.forEach((result: any, i: number) => {
-        if (result.error === 'NotRegistered' || result.error === 'InvalidRegistration') {
-          invalidTokens.push(tokens[i]);
+    // Send to each token
+    const results = await Promise.allSettled(
+      tokens.map(async ({ token }: { token: string }) => {
+        const fcmPayload = {
+          to: token,
+          notification: {
+            title,
+            body: notifBody,
+            sound: "default",
+            badge: 1,
+          },
+          data: {
+            ...data,
+            click_action: "FLUTTER_NOTIFICATION_CLICK",
+          },
+          priority: "high",
+        };
+
+        const res = await fetch("https://fcm.googleapis.com/fcm/send", {
+          method: "POST",
+          headers: {
+            Authorization: `key=${FCM_SERVER_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(fcmPayload),
+        });
+
+        const result = await res.json();
+        console.log("[Push] FCM result:", JSON.stringify(result));
+
+        // Remove invalid tokens
+        if (result.results?.[0]?.error === "InvalidRegistration" ||
+            result.results?.[0]?.error === "NotRegistered") {
+          await supabaseAdmin.from("fcm_tokens").delete().eq("token", token);
+          console.log("[Push] Removed invalid token");
         }
-      });
-      if (invalidTokens.length > 0) {
-        await supabaseAdmin
-          .from('fcm_tokens')
-          .delete()
-          .in('token', invalidTokens);
-        console.log(`[FCM] Removed ${invalidTokens.length} invalid tokens`);
-      }
-    }
+
+        return result;
+      })
+    );
 
     return new Response(
-      JSON.stringify({
-        sent: fcmResult.success ?? 0,
-        failed: fcmResult.failure ?? 0,
-        tokens_count: tokens.length,
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ success: true, sent: results.length }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err: any) {
-    console.error('[send-push-notification] Error:', err);
+    console.error("[Push] Error:", err);
     return new Response(
-      JSON.stringify({ error: err.message || 'Internal error' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ error: err.message }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });

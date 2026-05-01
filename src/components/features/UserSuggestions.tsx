@@ -64,6 +64,20 @@ export function UserSuggestions() {
         from_user_id: user.id,
       });
 
+      // Send push notification
+      const { sendActivityNotification } = await import('@/components/layout/AuthProvider');
+      const myProfile = await supabase
+        .from('user_profiles')
+        .select('username')
+        .eq('id', user.id)
+        .single();
+      sendActivityNotification({
+        recipientUserId: userId,
+        title: 'New Follower',
+        body: `${myProfile.data?.username || 'Someone'} followed you`,
+        data: { route: `/profile/${myProfile.data?.username}`, type: 'follow' }
+      });
+
       // Update state
       setFollowingIds((prev) => new Set(prev).add(userId));
       setSuggestions((prev) => prev.filter((s) => s.suggested_user_id !== userId));

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from '@/components/layout/AuthProvider';
 import { Sidebar } from '@/components/layout/Sidebar';
@@ -7,63 +7,65 @@ import { BottomNav } from '@/components/layout/BottomNav';
 import { FloatingActionButton } from '@/components/layout/FloatingActionButton';
 import { Toaster } from '@/components/ui/toaster';
 import { Toaster as Sonner } from 'sonner';
-import { initAdMob } from '@/lib/admob';
+import { Loader2 } from 'lucide-react';
 
+// Critical pages — loaded eagerly
 import HomePage from '@/pages/HomePage';
-import ExplorePage from '@/pages/ExplorePage';
-import NotificationsPage from '@/pages/NotificationsPage';
-import MessagesPage from '@/pages/MessagesPage';
-import ProfilePage from '@/pages/ProfilePage';
-import SearchPage from '@/pages/SearchPage';
 import AuthPage from '@/pages/AuthPage';
-import SpacesPage from '@/pages/SpacesPage';
-import AIPage from '@/pages/AIPage';
 import VideosPage from '@/pages/VideosPage';
-import AnalyticsDashboard from '@/pages/AnalyticsDashboard';
-import AdminPanel from '@/pages/AdminPanel';
-import PostThreadPage from '@/pages/PostThreadPage';
-import CommunitiesPage from '@/pages/CommunitiesPage';
-import CommunityPage from '@/pages/CommunityPage';
-import HashtagPage from '@/pages/HashtagPage';
-import AIBotSetup from '@/pages/AIBotSetup';
-import { BookmarksPage } from '@/pages/BookmarksPage';
-import { ListsPage } from '@/pages/ListsPage';
-import { MonetizationDashboard } from '@/pages/MonetizationDashboard';
-import { ProductsPage } from '@/pages/ProductsPage';
-import { ScheduledPostsPage } from '@/pages/ScheduledPostsPage';
-import CreatorStudio from '@/pages/CreatorStudio';
-import PremiumPage from '@/pages/PremiumPage';
-import LiveStreamPage from '@/pages/LiveStreamPage';
-import StartStreamPage from '@/pages/StartStreamPage';
-import SettingsPage from '@/pages/SettingsPage';
-import ThreadsPage from '@/pages/ThreadsPage';
-import CreateThreadPage from '@/pages/CreateThreadPage';
-import ThreadDetailPage from '@/pages/ThreadDetailPage';
-import HistoryPage from '@/pages/HistoryPage';
-import HelpPage from '@/pages/HelpPage';
-import WalletPage from '@/pages/WalletPage';
-import CreateAdPage from '@/pages/CreateAdPage';
-import MyAdsPage from '@/pages/MyAdsPage';
-import ListDetailPage from '@/pages/ListDetailPage';
-import AdConfigPage from '@/pages/AdConfigPage';
-import PayoutsPage from '@/pages/PayoutsPage';
-import RevenueAnalytics from '@/pages/RevenueAnalytics';
-import FraudDetection from '@/pages/FraudDetection';
-import AdPerformanceComparison from '@/pages/AdPerformanceComparison';
-import AdminRevenueDashboard from '@/pages/AdminRevenueDashboard';
-import BoostAnalyticsPage from '@/pages/BoostAnalyticsPage';
-import RewardedAdHistory from '@/pages/RewardedAdHistory';
+
+// All other pages — lazy loaded for faster initial load
+const ExplorePage = lazy(() => import('@/pages/ExplorePage'));
+const NotificationsPage = lazy(() => import('@/pages/NotificationsPage'));
+const MessagesPage = lazy(() => import('@/pages/MessagesPage'));
+const ProfilePage = lazy(() => import('@/pages/ProfilePage'));
+const SearchPage = lazy(() => import('@/pages/SearchPage'));
+const SpacesPage = lazy(() => import('@/pages/SpacesPage'));
+const AIPage = lazy(() => import('@/pages/AIPage'));
+const AnalyticsDashboard = lazy(() => import('@/pages/AnalyticsDashboard'));
+const AdminPanel = lazy(() => import('@/pages/AdminPanel'));
+const PostThreadPage = lazy(() => import('@/pages/PostThreadPage'));
+const CommunitiesPage = lazy(() => import('@/pages/CommunitiesPage'));
+const CommunityPage = lazy(() => import('@/pages/CommunityPage'));
+const HashtagPage = lazy(() => import('@/pages/HashtagPage'));
+const AIBotSetup = lazy(() => import('@/pages/AIBotSetup'));
+const BookmarksPage = lazy(() => import('@/pages/BookmarksPage').then(m => ({ default: m.BookmarksPage })));
+const ListsPage = lazy(() => import('@/pages/ListsPage').then(m => ({ default: m.ListsPage })));
+const MonetizationDashboard = lazy(() => import('@/pages/MonetizationDashboard').then(m => ({ default: m.MonetizationDashboard })));
+const ProductsPage = lazy(() => import('@/pages/ProductsPage').then(m => ({ default: m.ProductsPage })));
+const ScheduledPostsPage = lazy(() => import('@/pages/ScheduledPostsPage').then(m => ({ default: m.ScheduledPostsPage })));
+const CreatorStudio = lazy(() => import('@/pages/CreatorStudio'));
+const PremiumPage = lazy(() => import('@/pages/PremiumPage'));
+const LiveStreamPage = lazy(() => import('@/pages/LiveStreamPage'));
+const StartStreamPage = lazy(() => import('@/pages/StartStreamPage'));
+const SettingsPage = lazy(() => import('@/pages/SettingsPage'));
+const ThreadsPage = lazy(() => import('@/pages/ThreadsPage'));
+const CreateThreadPage = lazy(() => import('@/pages/CreateThreadPage'));
+const ThreadDetailPage = lazy(() => import('@/pages/ThreadDetailPage'));
+const HistoryPage = lazy(() => import('@/pages/HistoryPage'));
+const HelpPage = lazy(() => import('@/pages/HelpPage'));
+const WalletPage = lazy(() => import('@/pages/WalletPage'));
+const CreateAdPage = lazy(() => import('@/pages/CreateAdPage'));
+const MyAdsPage = lazy(() => import('@/pages/MyAdsPage'));
+const ListDetailPage = lazy(() => import('@/pages/ListDetailPage'));
+const AdConfigPage = lazy(() => import('@/pages/AdConfigPage'));
+const PayoutsPage = lazy(() => import('@/pages/PayoutsPage'));
+const RevenueAnalytics = lazy(() => import('@/pages/RevenueAnalytics'));
+const FraudDetection = lazy(() => import('@/pages/FraudDetection'));
+const AdPerformanceComparison = lazy(() => import('@/pages/AdPerformanceComparison'));
+const AdminRevenueDashboard = lazy(() => import('@/pages/AdminRevenueDashboard'));
+const BoostAnalyticsPage = lazy(() => import('@/pages/BoostAnalyticsPage'));
+const RewardedAdHistory = lazy(() => import('@/pages/RewardedAdHistory'));
+
+function PageLoader() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background">
+      <Loader2 className="w-8 h-8 animate-spin text-primary" />
+    </div>
+  );
+}
 
 export default function App() {
-  useEffect(() => {
-    /**
-     * Boot AdMob: initialize + preload interstitial & rewarded silently.
-     * NO banner is shown here — individual pages handle their own banners
-     * at the right moment, with proper bottom-nav margin.
-     */
-    initAdMob();
-  }, []);
-
   return (
     <BrowserRouter>
       <AuthProvider>
@@ -71,52 +73,57 @@ export default function App() {
           <Sidebar />
 
           <main className="flex-1 max-w-2xl w-full border-x border-border overflow-x-hidden">
-            <Routes>
-              <Route path="/" element={<HomePage />} />
-              <Route path="/explore" element={<ExplorePage />} />
-              <Route path="/notifications" element={<NotificationsPage />} />
-              <Route path="/messages" element={<MessagesPage />} />
-              <Route path="/spaces" element={<SpacesPage />} />
-              <Route path="/profile/:username" element={<ProfilePage />} />
-              <Route path="/search" element={<SearchPage />} />
-              <Route path="/auth" element={<AuthPage />} />
-              <Route path="/ai" element={<AIPage />} />
-              <Route path="/videos" element={<VideosPage />} />
-              <Route path="/analytics" element={<AnalyticsDashboard />} />
-              <Route path="/admin" element={<AdminPanel />} />
-              <Route path="/post/:postId" element={<PostThreadPage />} />
-              <Route path="/communities" element={<CommunitiesPage />} />
-              <Route path="/c/:name" element={<CommunityPage />} />
-              <Route path="/hashtag/:tag" element={<HashtagPage />} />
-              <Route path="/ai-bot-setup" element={<AIBotSetup />} />
-              <Route path="/bookmarks" element={<BookmarksPage />} />
-              <Route path="/lists" element={<ListsPage />} />
-              <Route path="/monetization" element={<MonetizationDashboard />} />
-              <Route path="/products" element={<ProductsPage />} />
-              <Route path="/scheduled" element={<ScheduledPostsPage />} />
-              <Route path="/creator-studio" element={<CreatorStudio />} />
-              <Route path="/premium" element={<PremiumPage />} />
-              <Route path="/stream/:streamId" element={<LiveStreamPage />} />
-              <Route path="/start-stream" element={<StartStreamPage />} />
-              <Route path="/settings" element={<SettingsPage />} />
-              <Route path="/threads" element={<ThreadsPage />} />
-              <Route path="/threads/create" element={<CreateThreadPage />} />
-              <Route path="/thread/:id" element={<ThreadDetailPage />} />
-              <Route path="/history" element={<HistoryPage />} />
-              <Route path="/help" element={<HelpPage />} />
-              <Route path="/wallet" element={<WalletPage />} />
-              <Route path="/create-ad" element={<CreateAdPage />} />
-              <Route path="/my-ads" element={<MyAdsPage />} />
-              <Route path="/lists/:id" element={<ListDetailPage />} />
-              <Route path="/admin/ads" element={<AdConfigPage />} />
-              <Route path="/payouts" element={<PayoutsPage />} />
-              <Route path="/revenue-analytics" element={<RevenueAnalytics />} />
-              <Route path="/fraud-detection" element={<FraudDetection />} />
-              <Route path="/ad-performance" element={<AdPerformanceComparison />} />
-              <Route path="/admin/revenue" element={<AdminRevenueDashboard />} />
-              <Route path="/boost-analytics/:postId" element={<BoostAnalyticsPage />} />
-              <Route path="/rewards" element={<RewardedAdHistory />} />
-            </Routes>
+            <Suspense fallback={<PageLoader />}>
+              <Routes>
+                {/* Critical — no lazy */}
+                <Route path="/" element={<HomePage />} />
+                <Route path="/auth" element={<AuthPage />} />
+                <Route path="/videos" element={<VideosPage />} />
+
+                {/* Lazy-loaded routes */}
+                <Route path="/explore" element={<ExplorePage />} />
+                <Route path="/notifications" element={<NotificationsPage />} />
+                <Route path="/messages" element={<MessagesPage />} />
+                <Route path="/spaces" element={<SpacesPage />} />
+                <Route path="/profile/:username" element={<ProfilePage />} />
+                <Route path="/search" element={<SearchPage />} />
+                <Route path="/ai" element={<AIPage />} />
+                <Route path="/analytics" element={<AnalyticsDashboard />} />
+                <Route path="/admin" element={<AdminPanel />} />
+                <Route path="/post/:postId" element={<PostThreadPage />} />
+                <Route path="/communities" element={<CommunitiesPage />} />
+                <Route path="/c/:name" element={<CommunityPage />} />
+                <Route path="/hashtag/:tag" element={<HashtagPage />} />
+                <Route path="/ai-bot-setup" element={<AIBotSetup />} />
+                <Route path="/bookmarks" element={<BookmarksPage />} />
+                <Route path="/lists" element={<ListsPage />} />
+                <Route path="/monetization" element={<MonetizationDashboard />} />
+                <Route path="/products" element={<ProductsPage />} />
+                <Route path="/scheduled" element={<ScheduledPostsPage />} />
+                <Route path="/creator-studio" element={<CreatorStudio />} />
+                <Route path="/premium" element={<PremiumPage />} />
+                <Route path="/stream/:streamId" element={<LiveStreamPage />} />
+                <Route path="/start-stream" element={<StartStreamPage />} />
+                <Route path="/settings" element={<SettingsPage />} />
+                <Route path="/threads" element={<ThreadsPage />} />
+                <Route path="/threads/create" element={<CreateThreadPage />} />
+                <Route path="/thread/:id" element={<ThreadDetailPage />} />
+                <Route path="/history" element={<HistoryPage />} />
+                <Route path="/help" element={<HelpPage />} />
+                <Route path="/wallet" element={<WalletPage />} />
+                <Route path="/create-ad" element={<CreateAdPage />} />
+                <Route path="/my-ads" element={<MyAdsPage />} />
+                <Route path="/lists/:id" element={<ListDetailPage />} />
+                <Route path="/admin/ads" element={<AdConfigPage />} />
+                <Route path="/payouts" element={<PayoutsPage />} />
+                <Route path="/revenue-analytics" element={<RevenueAnalytics />} />
+                <Route path="/fraud-detection" element={<FraudDetection />} />
+                <Route path="/ad-performance" element={<AdPerformanceComparison />} />
+                <Route path="/admin/revenue" element={<AdminRevenueDashboard />} />
+                <Route path="/boost-analytics/:postId" element={<BoostAnalyticsPage />} />
+                <Route path="/rewards" element={<RewardedAdHistory />} />
+              </Routes>
+            </Suspense>
           </main>
 
           <RightSidebar />

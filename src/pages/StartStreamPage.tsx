@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import { TopBar } from '@/components/layout/TopBar';
@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/lib/supabase';
-import { Loader2, Video, Users, Radio } from 'lucide-react';
+import { Loader2, Video, Users, Radio, Lock, BadgeCheck } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function StartStreamPage() {
@@ -17,11 +17,26 @@ export default function StartStreamPage() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('general');
+  const [userProfile, setUserProfile] = useState<any>(null);
+
+  useEffect(() => {
+    if (user) {
+      supabase
+        .from('user_profiles')
+        .select('verified')
+        .eq('id', user.id)
+        .single()
+        .then(({ data }) => setUserProfile(data));
+    }
+  }, [user]);
 
   const handleStartStream = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) {
-      navigate('/auth');
+    if (!user) { navigate('/auth'); return; }
+    if (!userProfile?.verified) {
+      toast.error('Only verified users can go live', {
+        description: 'Get your account verified to start live streams.'
+      });
       return;
     }
 
@@ -68,6 +83,26 @@ export default function StartStreamPage() {
       <TopBar title="Start Live Stream" showBack />
 
       <div className="max-w-2xl mx-auto p-4 md:p-8">
+        {/* Verification gate */}
+        {userProfile !== null && !userProfile?.verified && (
+          <div className="flex items-start gap-3 p-4 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-xl mb-6">
+            <Lock className="w-5 h-5 text-orange-500 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold text-orange-700 dark:text-orange-400">Verified accounts only</p>
+              <p className="text-sm text-orange-600 dark:text-orange-500 mt-0.5">
+                Live streaming is restricted to verified creators. Get verified to unlock this feature.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {userProfile?.verified && (
+          <div className="flex items-center gap-2 p-3 bg-primary/10 border border-primary/20 rounded-xl mb-4">
+            <BadgeCheck className="w-5 h-5 text-primary" />
+            <p className="text-sm font-medium text-primary">Verified creator — you can go live</p>
+          </div>
+        )}
+
         <div className="bg-gradient-to-r from-red-500/10 to-pink-500/10 border border-red-500/20 rounded-xl p-6 mb-6">
           <div className="flex items-center gap-3 mb-3">
             <div className="p-3 bg-red-500 rounded-full">
