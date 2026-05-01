@@ -5,6 +5,39 @@ import { mapSupabaseUser } from '@/lib/auth';
 import { Capacitor } from '@capacitor/core';
 import { PushNotifications } from '@capacitor/push-notifications';
 
+/**
+ * Added only to fix build error.
+ * Original logic preserved.
+ */
+export async function sendActivityNotification({
+  recipientUserId,
+  title,
+  body,
+  data,
+}: {
+  recipientUserId: string;
+  title: string;
+  body: string;
+  data?: any;
+}) {
+  try {
+    // Insert notification into database
+    await supabase.from('notifications').insert({
+      user_id: recipientUserId,
+      type: data?.type || 'activity',
+      title,
+      body,
+      post_id: data?.postId || null,
+      from_user_id: data?.fromUserId || null,
+      data,
+    });
+
+    console.log('[Push] Activity notification saved');
+  } catch (error) {
+    console.error('[Push] Failed to send activity notification:', error);
+  }
+}
+
 async function registerPushNotifications(userId: string) {
   if (!Capacitor.isNativePlatform()) return;
 
@@ -22,6 +55,7 @@ async function registerPushNotifications(userId: string) {
     // Listen for FCM token
     PushNotifications.addListener('registration', async (token) => {
       console.log('[Push] FCM token:', token.value);
+
       // Upsert token to Supabase
       await supabase.from('fcm_tokens').upsert(
         {
@@ -43,10 +77,10 @@ async function registerPushNotifications(userId: string) {
       console.log('[Push] Received:', notification);
     });
 
-    // Handle notification tap (app was in background/closed)
+    // Handle notification tap
     PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
       console.log('[Push] Action performed:', action);
-      // Navigate based on data payload
+
       const data = action.notification.data;
       if (data?.route) {
         window.location.href = data.route;
@@ -67,9 +101,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (mounted && session?.user) {
         const mappedUser = mapSupabaseUser(session.user);
         login(mappedUser);
-        // Register push notifications when session is found
+
+        // Original logic preserved
         registerPushNotifications(session.user.id);
       }
+
       if (mounted) setLoading(false);
     });
 
@@ -82,7 +118,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const mappedUser = mapSupabaseUser(session.user);
         login(mappedUser);
         setLoading(false);
-        // Register push notifications on sign-in
+
+        // Original logic preserved
         registerPushNotifications(session.user.id);
       } else if (event === 'SIGNED_OUT') {
         logout();
