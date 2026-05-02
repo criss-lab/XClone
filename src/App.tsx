@@ -9,9 +9,8 @@ import { Toaster } from '@/components/ui/toaster';
 import { Toaster as Sonner } from 'sonner';
 import { Loader2 } from 'lucide-react';
 
-// Capacitor immersive plugin & status bar
-import { Immersive } from 'capacitor-immersive';
-import { StatusBar, Style } from '@capacitor/status-bar';
+// Capacitor status bar
+import { StatusBar } from '@capacitor/status-bar';
 
 // Critical pages — loaded eagerly
 import HomePage from '@/pages/HomePage';
@@ -74,18 +73,9 @@ export default function App() {
   useEffect(() => {
     async function enableFullScreen() {
       try {
-        // Android immersive mode
-        await Immersive.setImmersive();
-
-        // Hide status bar (iOS + Android)
         await StatusBar.hide();
-
-        // Optional: Request fullscreen for web/PWA
-        if (document.documentElement.requestFullscreen) {
-          await document.documentElement.requestFullscreen();
-        }
       } catch (e) {
-        console.error('Full screen setup failed:', e);
+        // Non-fatal on web
       }
     }
 
