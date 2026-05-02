@@ -1,5 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
-
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.xclone.app">
 
@@ -27,7 +26,7 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/AppTheme">
+        android:theme="@style/AppTheme.NoActionBarLaunch"> <!-- UPDATED: NoActionBar -->
 
         <!-- ================= ADMOB ================= -->
         <meta-data
@@ -38,7 +37,7 @@
         <activity
             android:name=".MainActivity"
             android:label="@string/title_activity_main"
-            android:theme="@style/AppTheme.NoActionBarLaunch"
+            android:theme="@style/AppTheme.NoActionBarLaunch"  <!-- No action bar -->
             android:launchMode="singleTask"
             android:exported="true"
             android:hardwareAccelerated="true"
@@ -58,19 +57,15 @@
             android:authorities="${applicationId}.fileprovider"
             android:exported="false"
             android:grantUriPermissions="true">
-
             <meta-data
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"/>
-
         </provider>
 
         <!-- ================= FCM / PUSH NOTIFICATIONS ================= -->
         <service
             android:name="com.getcapacitor.plugin.PushNotifications.PushNotificationService"
             android:exported="false"/>
-
-        <!-- FCM receiver -->
         <receiver
             android:name="com.google.firebase.iid.FirebaseInstanceIdReceiver"
             android:exported="true"
@@ -81,5 +76,4 @@
         </receiver>
 
     </application>
-
 </manifest>
