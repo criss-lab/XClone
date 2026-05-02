@@ -7,6 +7,7 @@ import { PostCard } from '@/components/features/PostCard';
 import { EditProfileDialog } from '@/components/features/EditProfileDialog';
 import { RevenueAnalyticsWidget } from '@/components/features/RevenueAnalyticsWidget';
 import { Calendar, MapPin, Link as LinkIcon, Mail, BadgeCheck, Loader2, ExternalLink, Twitter, Instagram, Linkedin, MessageCircle } from 'lucide-react';
+import { sendActivityNotification } from '@/components/layout/AuthProvider';
 import { usePageBanner } from '@/hooks/usePageBanner';
 import { ADMOB_CONFIG } from '@/lib/admob';
 import { formatDistanceToNow } from 'date-fns';
@@ -231,6 +232,13 @@ export default function ProfilePage() {
           user_id: profile.id,
           type: 'follow',
           from_user_id: currentUser.id,
+        });
+        // Push notification
+        await sendActivityNotification({
+          recipientUserId: profile.id,
+          title: 'New Follower',
+          body: `${currentUser.username} started following you`,
+          data: { route: `/profile/${currentUser.username}`, type: 'follow', fromUserId: currentUser.id },
         });
       }
       setIsFollowing(!isFollowing);

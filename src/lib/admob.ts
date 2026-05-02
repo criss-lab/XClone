@@ -2,71 +2,76 @@
  * AdMob Production Configuration
  * App ID: ca-app-pub-7234579833875016~4829778821
  *
- * Production mode only — no isTesting, no testingDevices.
- * Ad units are mapped to specific placements for best UX.
+ * Production mode only — no test ads, no blank popups.
+ * Proper initialization ensures ads show on native platforms.
  */
 
 import { AdMob, BannerAdSize, BannerAdPosition, AdMobRewardItem } from '@capacitor-community/admob';
+import { Capacitor } from '@capacitor/core';
 
 export const ADMOB_CONFIG = {
   APP_ID: 'ca-app-pub-7234579833875016~4829778821',
 
   // ── Banners ───────────────────────────────────────────────────────
-  /** Feed / timeline top-of-page banner */
   BANNER_FEED:        'ca-app-pub-7234579833875016/4099641690',
-  /** Profile page banner */
   BANNER_PROFILE:     'ca-app-pub-7234579833875016/8657343194',
+  BANNER_EXPLORE:     'ca-app-pub-7234579833875016/3193754134',
 
   // ── Interstitial ──────────────────────────────────────────────────
-  /** Between-video full-screen interstitial */
   INTERSTITIAL:       'ca-app-pub-7234579833875016/8911947261',
 
   // ── Rewarded ──────────────────────────────────────────────────────
-  /** Watch-to-unlock rewarded video */
   REWARDED:           'ca-app-pub-7234579833875016/2031881558',
-
-  // ── Extra banners ─────────────────────────────────────────────────
-  BANNER_EXPLORE:     'ca-app-pub-7234579833875016/3193754134',
 } as const;
 
 let initialized = false;
 let interstitialReady = false;
 let rewardedReady = false;
 
+/** Returns true if running on a native platform where AdMob is available */
+export function isAdMobSupported(): boolean {
+  return Capacitor.isNativePlatform();
+}
+
 // ─── Core Init ───────────────────────────────────────────────────────────────
-/** Call once on app start. No testing, no blank startup ads. */
+/**
+ * Initialize AdMob for production.
+ * Must be called before showing any ads.
+ * Safe to call multiple times — will skip if already initialized.
+ */
 export async function initAdMob() {
+  if (!isAdMobSupported()) return;
   if (initialized) return;
   try {
     await AdMob.initialize({
-      requestTrackingAuthorization: true, // iOS App Tracking Transparency
-      initializeForTesting: false,        // production
+      requestTrackingAuthorization: true,
+      initializeForTesting: false,        // PRODUCTION
+      tagForChildDirectedTreatment: false,
+      tagForUnderAgeOfConsent: false,
     });
     initialized = true;
-    console.log('[AdMob] Initialized — production mode');
-
-    // Pre-load interstitial and rewarded silently
-    await Promise.allSettled([
-      preloadInterstitial(),
-      preloadRewarded(),
-    ]);
+    console.log('[AdMob] Initialized (production)');
+    // Silently preload heavy ad types
+    preloadInterstitial().catch(() => {});
+    preloadRewarded().catch(() => {});
   } catch (err) {
-    console.error('[AdMob] Init error:', err);
+    console.warn('[AdMob] Init error:', err);
   }
 }
 
 // ─── Banner ──────────────────────────────────────────────────────────────────
 /**
- * Show a native banner.
- * @param adId   Production ad unit ID
- * @param position BannerAdPosition enum value
- * @param margin  Bottom margin in px — use 64 to clear the bottom nav
+ * Show a native AdMob banner.
+ * @param adId    Production ad unit ID
+ * @param position Banner position
+ * @param margin  Bottom margin in px (64 clears bottom nav)
  */
 export async function showBanner(
   adId: string = ADMOB_CONFIG.BANNER_FEED,
   position: BannerAdPosition = BannerAdPosition.BOTTOM_CENTER,
-  margin = 64           // ← default above bottom nav
+  margin = 64
 ) {
+  if (!isAdMobSupported()) return;
   if (!initialized) await initAdMob();
   try {
     await AdMob.showBanner({
@@ -76,77 +81,112 @@ export async function showBanner(
       margin,
       isTesting: false,
     });
-    console.log('[AdMob] Banner shown:', adId);
+    console.log('[AdMob] Banner shown:', adId.slice(-8));
   } catch (err) {
-    console.error('[AdMob] Banner error:', err);
+    console.warn('[AdMob] Banner error:', err);
   }
 }
 
 export async function hideBanner() {
-  try { await AdMob.hideBanner(); } catch (_) {/* ignore */}
+  if (!isAdMobSupported()) return;
+  try { await AdMob.hideBanner(); } catch (_) {}
 }
 
 // ─── Interstitial ────────────────────────────────────────────────────────────
 async function preloadInterstitial(adId = ADMOB_CONFIG.INTERSTITIAL) {
+  if (!isAdMobSupported()) return;
   try {
     await AdMob.prepareInterstitial({ adId, isTesting: false });
     interstitialReady = true;
     console.log('[AdMob] Interstitial ready');
   } catch (err) {
-    console.error('[AdMob] Interstitial preload error:', err);
     interstitialReady = false;
+    console.warn('[AdMob] Interstitial preload:', err);
   }
 }
 
-/**
- * Show interstitial. Auto-reloads for next call.
- * Returns true on success.
- */
+/** Show interstitial. Auto-reloads for next call. Returns true on success. */
 export async function showInterstitial(adId = ADMOB_CONFIG.INTERSTITIAL): Promise<boolean> {
+  if (!isAdMobSupported()) return false;
   if (!initialized) await initAdMob();
   try {
-    if (!interstitialReady) {
-      await preloadInterstitial(adId);
-    }
+    if (!interstitialReady) await preloadInterstitial(adId);
     await AdMob.showInterstitial();
     interstitialReady = false;
-    // Silently preload next
     preloadInterstitial(adId).catch(() => {});
     return true;
   } catch (err) {
-    console.error('[AdMob] Interstitial show error:', err);
+    console.warn('[AdMob] Interstitial show:', err);
     return false;
   }
 }
 
 // ─── Rewarded ────────────────────────────────────────────────────────────────
 async function preloadRewarded(adId = ADMOB_CONFIG.REWARDED) {
+  if (!isAdMobSupported()) return;
   try {
     await AdMob.prepareRewardVideoAd({ adId, isTesting: false });
     rewardedReady = true;
     console.log('[AdMob] Rewarded ready');
   } catch (err) {
-    console.error('[AdMob] Rewarded preload error:', err);
     rewardedReady = false;
+    console.warn('[AdMob] Rewarded preload:', err);
   }
 }
 
-/**
- * Show rewarded ad. Returns the reward item or null on failure/skip.
- */
+/** Show rewarded ad. Returns reward item or null on failure/skip. */
 export async function showRewarded(adId = ADMOB_CONFIG.REWARDED): Promise<AdMobRewardItem | null> {
+  if (!isAdMobSupported()) return null;
   if (!initialized) await initAdMob();
   try {
-    if (!rewardedReady) {
-      await preloadRewarded(adId);
-    }
+    if (!rewardedReady) await preloadRewarded(adId);
     const result = await AdMob.showRewardVideoAd();
     rewardedReady = false;
-    // Silently reload next
     preloadRewarded(adId).catch(() => {});
     return result?.reward ?? null;
   } catch (err) {
-    console.error('[AdMob] Rewarded show error:', err);
+    console.warn('[AdMob] Rewarded show:', err);
     return null;
+  }
+}
+
+// ─── Creator Revenue Tracking ────────────────────────────────────────────────
+/**
+ * Track AdMob impression revenue for a creator.
+ * Called after each banner/interstitial impression attributed to creator content.
+ * Revenue split: 30% creator / 70% platform (as configured).
+ */
+export async function trackCreatorAdRevenue(params: {
+  supabase: any;
+  creatorUserId: string;
+  adType: 'banner' | 'interstitial' | 'rewarded';
+  grossRevenue: number; // USD
+}) {
+  const CREATOR_SHARE = 0.30; // 30% to creator
+  const PLATFORM_SHARE = 0.70;
+
+  const creatorAmount = params.grossRevenue * CREATOR_SHARE;
+  const platformAmount = params.grossRevenue * PLATFORM_SHARE;
+
+  try {
+    // Log earning
+    await params.supabase.from('creator_earnings').insert({
+      user_id: params.creatorUserId,
+      source: `${params.adType}_ads`,
+      amount: creatorAmount,
+      status: 'pending',
+    });
+
+    // Update revenue_shares
+    await params.supabase.rpc('increment', {
+      table_name: 'revenue_shares',
+      field_name: 'user_share',
+      row_id: params.creatorUserId,
+      amount: creatorAmount,
+    }).catch(() => {}); // RPC may not exist — silent fail
+
+    console.log(`[AdMob Revenue] Creator ${params.creatorUserId} earned $${creatorAmount.toFixed(4)}`);
+  } catch (e) {
+    console.warn('[AdMob Revenue] Tracking error:', e);
   }
 }

@@ -11,11 +11,14 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger
 } from '@/components/ui/dialog';
 import {
-  Users, Plus, TrendingUp, Loader2, Search, Lock, Globe, Shield, Crown
+  Users, Plus, TrendingUp, Loader2, Search, Lock, Globe, Shield, Crown,
+  Image as ImageIcon, X, Camera
 } from 'lucide-react';
 import { formatNumber } from '@/lib/utils';
 import { AdMob, BannerAdSize, BannerAdPosition } from '@capacitor-community/admob';
 import { Capacitor } from '@capacitor/core';
+import { ADMOB_CONFIG } from '@/lib/admob';
+import { toast as sonnerToast } from 'sonner';
 
 interface Community {
   id: string;
@@ -47,6 +50,10 @@ export default function CommunitiesPage() {
     description: '',
     is_private: false,
   });
+  const [iconFile, setIconFile] = useState<File | null>(null);
+  const [iconPreview, setIconPreview] = useState<string | null>(null);
+  const [bannerFile, setBannerFile] = useState<File | null>(null);
+  const [bannerPreview, setBannerPreview] = useState<string | null>(null);
 
   useEffect(() => {
     fetchCommunities();
@@ -55,21 +62,22 @@ export default function CommunitiesPage() {
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
     AdMob.showBanner({
-      adId: 'ca-app-pub-7234579833875016/8657343194',
-      adSize: BannerAdSize.BANNER,
+      adId: ADMOB_CONFIG.BANNER_PROFILE,
+      adSize: BannerAdSize.ADAPTIVE_BANNER,
       position: BannerAdPosition.BOTTOM_CENTER,
+      margin: 0,
+      isTesting: false,
     });
     return () => { AdMob.hideBanner(); };
   }, []);
 
   const fetchCommunities = async () => {
     try {
-      let query = supabase
+      const { data } = await supabase
         .from('communities')
         .select('*')
         .order('member_count', { ascending: false });
 
-      const { data } = await query;
       if (!data) return;
 
       if (user) {
@@ -79,14 +87,10 @@ export default function CommunitiesPage() {
           .eq('user_id', user.id);
 
         const memberIds = new Set(memberships?.map((m) => m.community_id));
-
         let enriched = data.map((c) => ({ ...c, is_member: memberIds.has(c.id) }));
 
-        if (activeTab === 'joined') {
-          enriched = enriched.filter(c => c.is_member);
-        } else if (activeTab === 'discover') {
-          enriched = enriched.filter(c => !c.is_member);
-        }
+        if (activeTab === 'joined') enriched = enriched.filter(c => c.is_member);
+        else if (activeTab === 'discover') enriched = enriched.filter(c => !c.is_member);
 
         setCommunities(enriched);
       } else {
@@ -99,9 +103,17 @@ export default function CommunitiesPage() {
     }
   };
 
+  const uploadImage = async (file: File, path: string): Promise<string | null> => {
+    const ext = file.name.split('.').pop();
+    const fileName = `${path}/${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from('posts').upload(fileName, file, { upsert: true });
+    if (error) { console.error('Upload error:', error); return null; }
+    const { data: { publicUrl } } = supabase.storage.from('posts').getPublicUrl(fileName);
+    return publicUrl;
+  };
+
   const handleCreateCommunity = async () => {
     if (!user) { navigate('/auth'); return; }
-
     if (!formData.name.trim() || !formData.display_name.trim()) {
       toast({ title: 'Error', description: 'Name and display name are required', variant: 'destructive' });
       return;
@@ -115,6 +127,18 @@ export default function CommunitiesPage() {
         return;
       }
 
+      sonnerToast.loading('Creating community...');
+
+      let iconUrl: string | null = null;
+      let bannerUrl: string | null = null;
+
+      if (iconFile) {
+        iconUrl = await uploadImage(iconFile, `communities/icons/${user.id}`);
+      }
+      if (bannerFile) {
+        bannerUrl = await uploadImage(bannerFile, `communities/banners/${user.id}`);
+      }
+
       const { data, error } = await supabase
         .from('communities')
         .insert({
@@ -123,6 +147,8 @@ export default function CommunitiesPage() {
           description: formData.description,
           is_private: formData.is_private,
           created_by: user.id,
+          icon_url: iconUrl,
+          banner_url: bannerUrl,
         })
         .select()
         .single();
@@ -136,12 +162,16 @@ export default function CommunitiesPage() {
         role: 'owner',
       });
 
+      sonnerToast.dismiss();
       toast({ title: '🎉 Community created!' });
       setCreateOpen(false);
       setFormData({ name: '', display_name: '', description: '', is_private: false });
+      setIconFile(null); setIconPreview(null);
+      setBannerFile(null); setBannerPreview(null);
       fetchCommunities();
       navigate(`/c/${communityName}`);
     } catch (error: any) {
+      sonnerToast.dismiss();
       toast({ title: 'Error', description: error.message || 'Failed to create community', variant: 'destructive' });
     } finally {
       setCreating(false);
@@ -205,32 +235,99 @@ export default function CommunitiesPage() {
                   Create
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-md">
+              <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>Create a Community</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4 pt-2">
+                  {/* Banner image upload */}
                   <div>
-                    <label className="text-sm font-medium block mb-1">Community Name (URL)</label>
+                    <label className="text-sm font-medium block mb-1">Banner Image (optional)</label>
+                    <div className="relative h-28 bg-gradient-to-r from-primary/20 to-purple-500/20 rounded-xl overflow-hidden border-2 border-dashed border-border cursor-pointer hover:border-primary/50 transition-colors">
+                      {bannerPreview && (
+                        <img src={bannerPreview} className="w-full h-full object-cover" alt="Banner preview" />
+                      )}
+                      <label className="absolute inset-0 flex flex-col items-center justify-center cursor-pointer">
+                        <Camera className="w-6 h-6 text-muted-foreground mb-1" />
+                        <span className="text-xs text-muted-foreground">Click to upload banner</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={e => {
+                            const f = e.target.files?.[0];
+                            if (f) { setBannerFile(f); setBannerPreview(URL.createObjectURL(f)); }
+                          }}
+                        />
+                      </label>
+                      {bannerPreview && (
+                        <button
+                          onClick={e => { e.preventDefault(); setBannerFile(null); setBannerPreview(null); }}
+                          className="absolute top-2 right-2 w-7 h-7 bg-black/70 rounded-full flex items-center justify-center text-white"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Icon upload */}
+                  <div className="flex items-center gap-3">
+                    <div className="relative">
+                      <div className="w-16 h-16 rounded-2xl bg-primary/10 border-2 border-dashed border-border overflow-hidden flex items-center justify-center">
+                        {iconPreview ? (
+                          <img src={iconPreview} className="w-full h-full object-cover" alt="Icon" />
+                        ) : (
+                          <ImageIcon className="w-6 h-6 text-muted-foreground" />
+                        )}
+                      </div>
+                      <label className="absolute inset-0 cursor-pointer rounded-2xl">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={e => {
+                            const f = e.target.files?.[0];
+                            if (f) { setIconFile(f); setIconPreview(URL.createObjectURL(f)); }
+                          }}
+                        />
+                      </label>
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">Community Icon</p>
+                      <p className="text-xs text-muted-foreground">Square image recommended</p>
+                      {iconPreview && (
+                        <button
+                          onClick={() => { setIconFile(null); setIconPreview(null); }}
+                          className="text-xs text-destructive mt-1"
+                        >
+                          Remove icon
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-medium block mb-1">Community Name (URL) *</label>
                     <Input
                       placeholder="technology"
                       value={formData.name}
                       onChange={e => setFormData(p => ({ ...p, name: e.target.value.toLowerCase().replace(/[^a-z0-9]/g, '') }))}
                     />
                     {formData.name && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        URL: /c/{formData.name}
-                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">URL: /c/{formData.name}</p>
                     )}
                   </div>
+
                   <div>
-                    <label className="text-sm font-medium block mb-1">Display Name</label>
+                    <label className="text-sm font-medium block mb-1">Display Name *</label>
                     <Input
                       placeholder="Technology Enthusiasts"
                       value={formData.display_name}
                       onChange={e => setFormData(p => ({ ...p, display_name: e.target.value }))}
                     />
                   </div>
+
                   <div>
                     <label className="text-sm font-medium block mb-1">Description</label>
                     <Textarea
@@ -240,28 +337,37 @@ export default function CommunitiesPage() {
                       rows={3}
                     />
                   </div>
-                  <div className="flex items-center gap-3 p-3 border border-border rounded-lg cursor-pointer hover:bg-muted/50"
-                    onClick={() => setFormData(p => ({ ...p, is_private: !p.is_private }))}>
+
+                  <div
+                    className="flex items-center gap-3 p-3 border border-border rounded-xl cursor-pointer hover:bg-muted/50 transition-colors"
+                    onClick={() => setFormData(p => ({ ...p, is_private: !p.is_private }))}
+                  >
                     {formData.is_private ? (
                       <Lock className="w-5 h-5 text-orange-500" />
                     ) : (
                       <Globe className="w-5 h-5 text-primary" />
                     )}
                     <div>
-                      <p className="font-medium text-sm">{formData.is_private ? 'Private' : 'Public'}</p>
+                      <p className="font-medium text-sm">{formData.is_private ? 'Private Community' : 'Public Community'}</p>
                       <p className="text-xs text-muted-foreground">
                         {formData.is_private
-                          ? 'Only members can see content'
+                          ? 'Only members can see content and posts'
                           : 'Anyone can join and see posts'}
                       </p>
                     </div>
+                    <div className={`ml-auto w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                      formData.is_private ? 'border-orange-500 bg-orange-500' : 'border-border'
+                    }`}>
+                      {formData.is_private && <div className="w-2 h-2 rounded-full bg-white" />}
+                    </div>
                   </div>
+
                   <Button
                     onClick={handleCreateCommunity}
-                    disabled={creating}
+                    disabled={creating || !formData.name || !formData.display_name}
                     className="w-full rounded-full"
                   >
-                    {creating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                    {creating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Plus className="w-4 h-4 mr-2" />}
                     Create Community
                   </Button>
                 </div>
@@ -270,7 +376,6 @@ export default function CommunitiesPage() {
           )}
         </div>
 
-        {/* Search */}
         <div className="relative mt-4">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
@@ -317,72 +422,80 @@ export default function CommunitiesPage() {
           filtered.map(community => (
             <div
               key={community.id}
-              className="bg-card border border-border rounded-xl p-4 hover:border-primary/30 transition-all cursor-pointer"
+              className="bg-card border border-border rounded-xl overflow-hidden hover:border-primary/30 transition-all cursor-pointer"
               onClick={() => navigate(`/c/${community.name}`)}
             >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-start gap-3 flex-1 min-w-0">
-                  {/* Icon */}
-                  <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0 overflow-hidden">
-                    {community.icon_url ? (
-                      <img src={community.icon_url} alt={community.display_name} className="w-full h-full object-cover" />
-                    ) : (
-                      <span className="text-xl font-bold text-primary">{community.display_name[0]}</span>
-                    )}
-                  </div>
-
-                  {/* Info */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="font-bold text-foreground truncate">{community.display_name}</h3>
-                      {community.is_private ? (
-                        <span className="flex items-center gap-1 text-xs bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 px-2 py-0.5 rounded-full">
-                          <Lock className="w-3 h-3" /> Private
-                        </span>
-                      ) : (
-                        <span className="flex items-center gap-1 text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
-                          <Globe className="w-3 h-3" /> Public
-                        </span>
-                      )}
-                      {community.is_member && (
-                        <span className="flex items-center gap-1 text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded-full">
-                          <Shield className="w-3 h-3" /> Member
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-0.5">c/{community.name}</p>
-                    {community.description && (
-                      <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{community.description}</p>
-                    )}
-                    <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <Users className="w-3 h-3" />
-                        {formatNumber(community.member_count)} members
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <TrendingUp className="w-3 h-3" />
-                        {formatNumber(community.post_count)} posts
-                      </span>
-                    </div>
-                  </div>
+              {/* Banner */}
+              {community.banner_url && (
+                <div className="h-20 overflow-hidden">
+                  <img src={community.banner_url} alt="" className="w-full h-full object-cover" />
                 </div>
+              )}
 
-                {/* Join/Leave button */}
-                {user && (
-                  <Button
-                    size="sm"
-                    variant={community.is_member ? 'outline' : 'default'}
-                    className="rounded-full flex-shrink-0"
-                    onClick={e => {
-                      e.stopPropagation();
-                      community.is_member
-                        ? handleLeave(community.id)
-                        : handleJoin(community.id);
-                    }}
-                  >
-                    {community.is_member ? 'Joined' : 'Join'}
-                  </Button>
-                )}
+              <div className="p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-3 flex-1 min-w-0">
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden ${
+                      community.banner_url ? '-mt-8 ring-2 ring-background' : 'bg-primary/10'
+                    }`}>
+                      {community.icon_url ? (
+                        <img src={community.icon_url} alt={community.display_name} className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-xl font-bold text-primary">{community.display_name[0]}</span>
+                      )}
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="font-bold text-foreground truncate">{community.display_name}</h3>
+                        {community.is_private ? (
+                          <span className="flex items-center gap-1 text-xs bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 px-2 py-0.5 rounded-full">
+                            <Lock className="w-3 h-3" /> Private
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-1 text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                            <Globe className="w-3 h-3" /> Public
+                          </span>
+                        )}
+                        {community.is_member && (
+                          <span className="flex items-center gap-1 text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded-full">
+                            <Shield className="w-3 h-3" /> Member
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">c/{community.name}</p>
+                      {community.description && (
+                        <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{community.description}</p>
+                      )}
+                      <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                          <Users className="w-3 h-3" />
+                          {formatNumber(community.member_count)} members
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <TrendingUp className="w-3 h-3" />
+                          {formatNumber(community.post_count)} posts
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {user && (
+                    <Button
+                      size="sm"
+                      variant={community.is_member ? 'outline' : 'default'}
+                      className="rounded-full flex-shrink-0"
+                      onClick={e => {
+                        e.stopPropagation();
+                        community.is_member
+                          ? handleLeave(community.id)
+                          : handleJoin(community.id);
+                      }}
+                    >
+                      {community.is_member ? 'Joined' : 'Join'}
+                    </Button>
+                  )}
+                </div>
               </div>
             </div>
           ))

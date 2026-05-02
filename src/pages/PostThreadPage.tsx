@@ -4,11 +4,13 @@ import { TopBar } from '@/components/layout/TopBar';
 import { PostCard } from '@/components/features/PostCard';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
+import { sendActivityNotification } from '@/components/layout/AuthProvider';
 import { Post } from '@/types';
-import { Loader2, Send } from 'lucide-react';
+import { Loader2, Send, BadgeCheck } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
+import { formatDistanceToNow } from 'date-fns';
 
 interface Reply {
   id: string;
@@ -38,10 +40,8 @@ export default function PostThreadPage() {
 
   useEffect(() => {
     if (postId) fetchPostAndReplies();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [postId]);
 
-  // Fetch post & replies
   const fetchPostAndReplies = async () => {
     if (!postId) return;
     setLoading(true);
@@ -60,7 +60,6 @@ export default function PostThreadPage() {
         .eq('post_id', postId)
         .order('created_at', { ascending: true });
       if (repliesError) throw repliesError;
-
       setReplies(repliesData || []);
     } catch (err) {
       console.error('Error fetching post thread:', err);
@@ -76,7 +75,6 @@ export default function PostThreadPage() {
 
     setSubmitting(true);
     try {
-      // Insert reply
       const { error: insertError } = await supabase.from('replies').insert({
         post_id: postId,
         user_id: user.id,
@@ -84,12 +82,13 @@ export default function PostThreadPage() {
       });
       if (insertError) throw insertError;
 
-      // Update post replies_count
       if (post) {
-        await supabase.from('posts').update({ replies_count: post.replies_count + 1 }).eq('id', postId);
+        await supabase.from('posts')
+          .update({ replies_count: post.replies_count + 1 })
+          .eq('id', postId);
       }
 
-      // Notify post owner
+      // DB notification
       if (post && post.user_id !== user.id) {
         await supabase.from('notifications').insert({
           user_id: post.user_id,
@@ -97,10 +96,17 @@ export default function PostThreadPage() {
           from_user_id: user.id,
           post_id: postId,
         });
+        // Push notification
+        await sendActivityNotification({
+          recipientUserId: post.user_id,
+          title: 'New Reply',
+          body: `${user.username} replied to your post: "${replyContent.trim().slice(0, 60)}..."`,
+          data: { route: `/post/${postId}`, type: 'reply', fromUserId: user.id, postId },
+        });
       }
 
       setReplyContent('');
-      toast({ title: 'Reply posted successfully' });
+      toast({ title: 'Reply posted!' });
       fetchPostAndReplies();
     } catch (err: any) {
       console.error('Reply error:', err);
@@ -122,15 +128,13 @@ export default function PostThreadPage() {
     return (
       <div className="min-h-screen bg-background">
         <TopBar title="Post" showBack />
-        <div className="text-center py-12 text-muted-foreground">
-          <p>Post not found</p>
-        </div>
+        <div className="text-center py-12 text-muted-foreground">Post not found</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background pb-16 md:pb-0">
+    <div className="min-h-screen bg-background pb-20 md:pb-0">
       <TopBar title="Post" showBack />
 
       {/* Main post */}
@@ -138,7 +142,7 @@ export default function PostThreadPage() {
 
       {/* Reply composer */}
       {user && (
-        <div className="border-b border-border p-4">
+        <div className="border-b border-border p-4 bg-muted/5">
           <div className="flex space-x-3">
             <div className="w-10 h-10 rounded-full bg-muted flex-shrink-0 overflow-hidden">
               {user.avatar ? (
@@ -151,13 +155,13 @@ export default function PostThreadPage() {
             </div>
             <div className="flex-1">
               <Textarea
-                placeholder="Post your reply"
+                placeholder={`Reply to @${post.user_profiles?.username}...`}
                 value={replyContent}
                 onChange={(e) => setReplyContent(e.target.value)}
                 className="min-h-[80px] border-0 resize-none focus-visible:ring-0 p-0 text-base bg-transparent"
                 maxLength={280}
               />
-              <div className="flex items-center justify-between mt-3">
+              <div className="flex items-center justify-between mt-3 pt-2 border-t border-border">
                 {replyContent.length > 0 && (
                   <span className={`text-sm ${replyContent.length > 260 ? 'text-destructive' : 'text-muted-foreground'}`}>
                     {replyContent.length}/280
@@ -168,7 +172,12 @@ export default function PostThreadPage() {
                   disabled={submitting || !replyContent.trim() || replyContent.length > 280}
                   className="rounded-full px-6 font-semibold ml-auto"
                 >
-                  {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Reply'}
+                  {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : (
+                    <>
+                      <Send className="w-4 h-4 mr-1.5" />
+                      Reply
+                    </>
+                  )}
                 </Button>
               </div>
             </div>
@@ -180,42 +189,50 @@ export default function PostThreadPage() {
       <div>
         {replies.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground">
-            <p>No replies yet</p>
+            <p className="font-medium">No replies yet</p>
             <p className="text-sm mt-1">Be the first to reply!</p>
           </div>
         ) : (
-          replies.map((reply) => (
-            <div key={reply.id} className="border-b border-border p-4 hover:bg-muted/5 transition-colors">
-              <div className="flex space-x-3">
-                <div
-                  className="w-10 h-10 rounded-full bg-muted flex-shrink-0 overflow-hidden cursor-pointer"
-                  onClick={() => navigate(`/profile/${reply.user_profiles.username}`)}
-                >
-                  {reply.user_profiles.avatar_url ? (
-                    <img src={reply.user_profiles.avatar_url} alt={reply.user_profiles.username} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-sm font-semibold">
-                      {reply.user_profiles.username[0]?.toUpperCase()}
-                    </div>
-                  )}
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center space-x-1">
-                    <span
-                      className="font-bold cursor-pointer hover:underline"
-                      onClick={() => navigate(`/profile/${reply.user_profiles.username}`)}
-                    >
-                      {reply.user_profiles.username}
-                    </span>
-                    <span className="text-muted-foreground text-sm">
-                      @{reply.user_profiles.username}
-                    </span>
+          <>
+            <div className="px-4 py-2 border-b border-border">
+              <span className="text-sm font-semibold text-muted-foreground">{replies.length} {replies.length === 1 ? 'reply' : 'replies'}</span>
+            </div>
+            {replies.map((reply) => (
+              <div key={reply.id} className="border-b border-border p-4 hover:bg-muted/5 transition-colors">
+                <div className="flex space-x-3">
+                  <div
+                    className="w-10 h-10 rounded-full bg-muted flex-shrink-0 overflow-hidden cursor-pointer"
+                    onClick={() => navigate(`/profile/${reply.user_profiles.username}`)}
+                  >
+                    {reply.user_profiles.avatar_url ? (
+                      <img src={reply.user_profiles.avatar_url} alt={reply.user_profiles.username} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-sm font-semibold">
+                        {reply.user_profiles.username[0]?.toUpperCase()}
+                      </div>
+                    )}
                   </div>
-                  <p className="text-foreground mt-1 whitespace-pre-wrap break-words">{reply.content}</p>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span
+                        className="font-bold cursor-pointer hover:underline"
+                        onClick={() => navigate(`/profile/${reply.user_profiles.username}`)}
+                      >
+                        {reply.user_profiles.username}
+                      </span>
+                      {reply.user_profiles.verified && (
+                        <BadgeCheck className="w-4 h-4 text-primary" fill="currentColor" />
+                      )}
+                      <span className="text-muted-foreground text-sm">
+                        · {formatDistanceToNow(new Date(reply.created_at), { addSuffix: true })}
+                      </span>
+                    </div>
+                    <p className="text-foreground mt-1 whitespace-pre-wrap break-words">{reply.content}</p>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))
+            ))}
+          </>
         )}
       </div>
     </div>

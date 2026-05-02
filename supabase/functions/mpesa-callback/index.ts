@@ -178,10 +178,56 @@ async function fulfillPurpose(
       }
 
       case "verification": {
+        // Auto-verify on payment confirmation
         await supabase
           .from("user_profiles")
           .update({ verified: true })
           .eq("id", user_id);
+
+        // Mark verification request as approved
+        await supabase
+          .from("verification_requests")
+          .update({ status: 'approved', payment_status: 'paid', processed_at: new Date().toISOString() })
+          .eq("user_id", user_id)
+          .eq("status", 'pending');
+
+        console.log(`[Verification] Auto-verified user ${user_id}`);
+        break;
+      }
+
+      case "ad_payment": {
+        // Auto-activate ad on M-Pesa payment
+        const { adId } = metadata ?? {};
+        if (adId) {
+          await supabase.from("user_ads").update({
+            payment_status: 'paid',
+            status: 'active',
+            payment_reference: txn.mpesa_receipt_number,
+            start_date: new Date().toISOString(),
+            end_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+          }).eq("id", adId);
+
+          // Run AI auto-verification
+          try {
+            await supabase.rpc('auto_verify_ad', { ad_id_param: adId });
+          } catch (e) { console.warn('auto_verify_ad error:', e); }
+
+          console.log(`[Ad] Auto-activated ad ${adId} after payment`);
+        }
+        break;
+      }
+
+      case "creator_monetization": {
+        // Auto-enable monetization on payment
+        await supabase.from("user_monetization").upsert({
+          user_id,
+          is_monetized: true,
+          eligibility_status: 'approved',
+        }, { onConflict: 'user_id' });
+        await supabase.from("user_profiles")
+          .update({ is_creator: true, can_monetize: true, creator_tier: 'basic' })
+          .eq("id", user_id);
+        console.log(`[Monetization] Auto-enabled for user ${user_id}`);
         break;
       }
 
