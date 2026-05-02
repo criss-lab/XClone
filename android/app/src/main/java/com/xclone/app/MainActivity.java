@@ -2,6 +2,7 @@ package com.xclone.app;
 
 import android.os.Bundle;
 import android.view.KeyEvent;
+import android.view.View;
 import android.widget.Toast;
 
 import com.getcapacitor.BridgeActivity;
@@ -13,6 +14,17 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        // ================= Immersive Fullscreen =================
+        final View decorView = getWindow().getDecorView();
+        decorView.setSystemUiVisibility(
+            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY    // Keep immersive after swipe
+            | View.SYSTEM_UI_FLAG_FULLSCREEN        // Hide status bar
+            | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION   // Hide navigation bar
+            | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+            | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+            | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+        );
     }
 
     // Handle Android back button navigation
@@ -43,6 +55,17 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onResume() {
         super.onResume();
+
+        // Re-enable immersive mode if user swiped to show bars
+        final View decorView = getWindow().getDecorView();
+        decorView.setSystemUiVisibility(
+            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+            | View.SYSTEM_UI_FLAG_FULLSCREEN
+            | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+            | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+            | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+            | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+        );
     }
 
     @Override
