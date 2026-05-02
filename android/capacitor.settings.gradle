@@ -4,8 +4,6 @@ project(':capacitor-android').projectDir = new File('../node_modules/@capacitor/
 
 include ':capacitor-community-admob'
 project(':capacitor-community-admob').projectDir = new File('../node_modules/@capacitor-community/admob/android')
-<<<<<<< HEAD
-=======
 
 include ':capacitor-community-firebase-analytics'
 project(':capacitor-community-firebase-analytics').projectDir = new File('../node_modules/@capacitor-community/firebase-analytics/android')
@@ -31,9 +29,8 @@ project(':capacitor-push-notifications').projectDir = new File('../node_modules/
 include ':capacitor-share'
 project(':capacitor-share').projectDir = new File('../node_modules/@capacitor/share/android')
 
-include ':capacitor-voice-recorder'
-project(':capacitor-voice-recorder').projectDir = new File('../node_modules/capacitor-voice-recorder/android')
+include ':capacitor-status-bar'
+project(':capacitor-status-bar').projectDir = new File('../node_modules/@capacitor/status-bar/android')
 
 include ':cordova-plugin-audioinput'
 project(':cordova-plugin-audioinput').projectDir = new File('../node_modules/cordova-plugin-audioinput/android')
->>>>>>> 4d126fe (fix: added missing dependency)
