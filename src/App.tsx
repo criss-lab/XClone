@@ -9,12 +9,16 @@ import { Toaster } from '@/components/ui/toaster';
 import { Toaster as Sonner } from 'sonner';
 import { Loader2 } from 'lucide-react';
 
+// Capacitor immersive plugin & status bar
+import { Immersive } from 'capacitor-immersive';
+import { StatusBar, Style } from '@capacitor/status-bar';
+
 // Critical pages — loaded eagerly
 import HomePage from '@/pages/HomePage';
 import AuthPage from '@/pages/AuthPage';
 import VideosPage from '@/pages/VideosPage';
 
-// All other pages — lazy loaded for faster initial load
+// All other pages — lazy loaded
 const ExplorePage = lazy(() => import('@/pages/ExplorePage'));
 const NotificationsPage = lazy(() => import('@/pages/NotificationsPage'));
 const MessagesPage = lazy(() => import('@/pages/MessagesPage'));
@@ -66,6 +70,28 @@ function PageLoader() {
 }
 
 export default function App() {
+
+  useEffect(() => {
+    async function enableFullScreen() {
+      try {
+        // Android immersive mode
+        await Immersive.setImmersive();
+
+        // Hide status bar (iOS + Android)
+        await StatusBar.hide();
+
+        // Optional: Request fullscreen for web/PWA
+        if (document.documentElement.requestFullscreen) {
+          await document.documentElement.requestFullscreen();
+        }
+      } catch (e) {
+        console.error('Full screen setup failed:', e);
+      }
+    }
+
+    enableFullScreen();
+  }, []); // runs once when App mounts
+
   return (
     <BrowserRouter>
       <AuthProvider>
