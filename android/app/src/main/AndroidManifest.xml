@@ -1,23 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.xclone.app">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- ================= REQUIRED PERMISSIONS ================= -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
     <uses-permission android:name="android.permission.VIBRATE"/>
 
-    <!-- Microphone permissions -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
 
-    <!-- For downloads / files -->
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
-    <uses-permission
-        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
-        android:maxSdkVersion="28"/>
-
-    <!-- ================= APPLICATION ================= -->
     <application
         android:allowBackup="true"
         android:hardwareAccelerated="true"
@@ -26,24 +16,21 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/AppTheme.NoActionBarLaunch"> <!-- UPDATED: NoActionBar -->
+        android:theme="@style/AppTheme.NoActionBarLaunch">
 
-        <!-- ================= ADMOB ================= -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
             android:value="ca-app-pub-7234579833875016~4829778821"/>
 
-        <!-- ================= MAIN ACTIVITY ================= -->
         <activity
             android:name=".MainActivity"
             android:label="@string/title_activity_main"
-            android:theme="@style/AppTheme.NoActionBarLaunch"  <!-- No action bar -->
+            android:theme="@style/AppTheme.NoActionBarLaunch"
             android:launchMode="singleTask"
             android:exported="true"
             android:hardwareAccelerated="true"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density">
 
-            <!-- App launcher -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
@@ -51,7 +38,6 @@
 
         </activity>
 
-        <!-- ================= FILE PROVIDER ================= -->
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -62,18 +48,9 @@
                 android:resource="@xml/file_paths"/>
         </provider>
 
-        <!-- ================= FCM / PUSH NOTIFICATIONS ================= -->
         <service
             android:name="com.getcapacitor.plugin.PushNotifications.PushNotificationService"
             android:exported="false"/>
-        <receiver
-            android:name="com.google.firebase.iid.FirebaseInstanceIdReceiver"
-            android:exported="true"
-            android:permission="com.google.android.c2dm.permission.SEND">
-            <intent-filter>
-                <action android:name="com.google.android.c2dm.intent.RECEIVE"/>
-            </intent-filter>
-        </receiver>
 
     </application>
 </manifest>
