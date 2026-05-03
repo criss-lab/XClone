@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from "react";
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { AuthProvider } from '@/components/layout/AuthProvider';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { RightSidebar } from '@/components/layout/RightSidebar';
@@ -9,8 +9,10 @@ import { Toaster } from '@/components/ui/toaster';
 import { Toaster as Sonner } from 'sonner';
 import { Loader2 } from 'lucide-react';
 
-// Capacitor status bar
-import { StatusBar } from '@capacitor/status-bar';
+// Capacitor
+import { StatusBar, Style } from '@capacitor/status-bar';
+import { Capacitor } from '@capacitor/core';
+import { showInterstitial } from '@/lib/admob';
 
 // Critical pages — loaded eagerly
 import HomePage from '@/pages/HomePage';
@@ -68,88 +70,111 @@ function PageLoader() {
   );
 }
 
-export default function App() {
+// ─── Inner app — has access to router context ─────────────────────────────────
+let navCount = 0;
+const INTERSTITIAL_EVERY = 5; // Show interstitial every 5 navigations
 
+function AppInner() {
+  const location = useLocation(); // safe — inside BrowserRouter
+
+  // Immersive mode on Capacitor: status bar overlays content (edge-to-edge)
   useEffect(() => {
-    async function enableFullScreen() {
+    if (!Capacitor.isNativePlatform()) return;
+    (async () => {
       try {
-        await StatusBar.hide();
-      } catch (e) {
-        // Non-fatal on web
+        await StatusBar.setStyle({ style: Style.Dark });
+        await StatusBar.setBackgroundColor({ color: '#00000000' });
+        await StatusBar.setOverlaysWebView({ overlay: true });
+      } catch {
+        try { await StatusBar.hide(); } catch (_) {}
       }
-    }
+    })();
+  }, []);
 
-    enableFullScreen();
-  }, []); // runs once when App mounts
+  // Revenue maximization: show interstitial every 5 page navigations
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    navCount++;
+    if (navCount % INTERSTITIAL_EVERY === 0) {
+      setTimeout(() => showInterstitial().catch(() => {}), 800);
+    }
+  }, [location.pathname]);
 
   return (
+    <AuthProvider>
+      <div className="flex min-h-screen bg-background overflow-x-hidden pb-20">
+        <Sidebar />
+
+        <main className="flex-1 max-w-2xl w-full border-x border-border overflow-x-hidden">
+          <Suspense fallback={<PageLoader />}>
+            <Routes>
+              {/* Critical — no lazy */}
+              <Route path="/" element={<HomePage />} />
+              <Route path="/auth" element={<AuthPage />} />
+              <Route path="/videos" element={<VideosPage />} />
+
+              {/* Lazy-loaded routes */}
+              <Route path="/explore" element={<ExplorePage />} />
+              <Route path="/notifications" element={<NotificationsPage />} />
+              <Route path="/messages" element={<MessagesPage />} />
+              <Route path="/spaces" element={<SpacesPage />} />
+              <Route path="/profile/:username" element={<ProfilePage />} />
+              <Route path="/search" element={<SearchPage />} />
+              <Route path="/ai" element={<AIPage />} />
+              <Route path="/analytics" element={<AnalyticsDashboard />} />
+              <Route path="/admin" element={<AdminPanel />} />
+              <Route path="/post/:postId" element={<PostThreadPage />} />
+              <Route path="/communities" element={<CommunitiesPage />} />
+              <Route path="/c/:name" element={<CommunityPage />} />
+              <Route path="/hashtag/:tag" element={<HashtagPage />} />
+              <Route path="/ai-bot-setup" element={<AIBotSetup />} />
+              <Route path="/bookmarks" element={<BookmarksPage />} />
+              <Route path="/lists" element={<ListsPage />} />
+              <Route path="/monetization" element={<MonetizationDashboard />} />
+              <Route path="/products" element={<ProductsPage />} />
+              <Route path="/scheduled" element={<ScheduledPostsPage />} />
+              <Route path="/creator-studio" element={<CreatorStudio />} />
+              <Route path="/premium" element={<PremiumPage />} />
+              <Route path="/stream/:streamId" element={<LiveStreamPage />} />
+              <Route path="/start-stream" element={<StartStreamPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/threads" element={<ThreadsPage />} />
+              <Route path="/threads/create" element={<CreateThreadPage />} />
+              <Route path="/thread/:id" element={<ThreadDetailPage />} />
+              <Route path="/history" element={<HistoryPage />} />
+              <Route path="/help" element={<HelpPage />} />
+              <Route path="/wallet" element={<WalletPage />} />
+              <Route path="/create-ad" element={<CreateAdPage />} />
+              <Route path="/my-ads" element={<MyAdsPage />} />
+              <Route path="/lists/:id" element={<ListDetailPage />} />
+              <Route path="/admin/ads" element={<AdConfigPage />} />
+              <Route path="/payouts" element={<PayoutsPage />} />
+              <Route path="/revenue-analytics" element={<RevenueAnalytics />} />
+              <Route path="/fraud-detection" element={<FraudDetection />} />
+              <Route path="/ad-performance" element={<AdPerformanceComparison />} />
+              <Route path="/admin/revenue" element={<AdminRevenueDashboard />} />
+              <Route path="/boost-analytics/:postId" element={<BoostAnalyticsPage />} />
+              <Route path="/rewards" element={<RewardedAdHistory />} />
+            </Routes>
+          </Suspense>
+        </main>
+
+        <RightSidebar />
+        <BottomNav />
+        <FloatingActionButton />
+      </div>
+
+      <Toaster />
+      <Sonner position="top-center" richColors />
+    </AuthProvider>
+  );
+}
+
+// ─── Root — BrowserRouter wraps everything ───────────────────────────────────
+export default function App() {
+  return (
     <BrowserRouter>
-      <AuthProvider>
-        <div className="flex min-h-screen bg-background overflow-x-hidden pb-20">
-          <Sidebar />
-
-          <main className="flex-1 max-w-2xl w-full border-x border-border overflow-x-hidden">
-            <Suspense fallback={<PageLoader />}>
-              <Routes>
-                {/* Critical — no lazy */}
-                <Route path="/" element={<HomePage />} />
-                <Route path="/auth" element={<AuthPage />} />
-                <Route path="/videos" element={<VideosPage />} />
-
-                {/* Lazy-loaded routes */}
-                <Route path="/explore" element={<ExplorePage />} />
-                <Route path="/notifications" element={<NotificationsPage />} />
-                <Route path="/messages" element={<MessagesPage />} />
-                <Route path="/spaces" element={<SpacesPage />} />
-                <Route path="/profile/:username" element={<ProfilePage />} />
-                <Route path="/search" element={<SearchPage />} />
-                <Route path="/ai" element={<AIPage />} />
-                <Route path="/analytics" element={<AnalyticsDashboard />} />
-                <Route path="/admin" element={<AdminPanel />} />
-                <Route path="/post/:postId" element={<PostThreadPage />} />
-                <Route path="/communities" element={<CommunitiesPage />} />
-                <Route path="/c/:name" element={<CommunityPage />} />
-                <Route path="/hashtag/:tag" element={<HashtagPage />} />
-                <Route path="/ai-bot-setup" element={<AIBotSetup />} />
-                <Route path="/bookmarks" element={<BookmarksPage />} />
-                <Route path="/lists" element={<ListsPage />} />
-                <Route path="/monetization" element={<MonetizationDashboard />} />
-                <Route path="/products" element={<ProductsPage />} />
-                <Route path="/scheduled" element={<ScheduledPostsPage />} />
-                <Route path="/creator-studio" element={<CreatorStudio />} />
-                <Route path="/premium" element={<PremiumPage />} />
-                <Route path="/stream/:streamId" element={<LiveStreamPage />} />
-                <Route path="/start-stream" element={<StartStreamPage />} />
-                <Route path="/settings" element={<SettingsPage />} />
-                <Route path="/threads" element={<ThreadsPage />} />
-                <Route path="/threads/create" element={<CreateThreadPage />} />
-                <Route path="/thread/:id" element={<ThreadDetailPage />} />
-                <Route path="/history" element={<HistoryPage />} />
-                <Route path="/help" element={<HelpPage />} />
-                <Route path="/wallet" element={<WalletPage />} />
-                <Route path="/create-ad" element={<CreateAdPage />} />
-                <Route path="/my-ads" element={<MyAdsPage />} />
-                <Route path="/lists/:id" element={<ListDetailPage />} />
-                <Route path="/admin/ads" element={<AdConfigPage />} />
-                <Route path="/payouts" element={<PayoutsPage />} />
-                <Route path="/revenue-analytics" element={<RevenueAnalytics />} />
-                <Route path="/fraud-detection" element={<FraudDetection />} />
-                <Route path="/ad-performance" element={<AdPerformanceComparison />} />
-                <Route path="/admin/revenue" element={<AdminRevenueDashboard />} />
-                <Route path="/boost-analytics/:postId" element={<BoostAnalyticsPage />} />
-                <Route path="/rewards" element={<RewardedAdHistory />} />
-              </Routes>
-            </Suspense>
-          </main>
-
-          <RightSidebar />
-          <BottomNav />
-          <FloatingActionButton />
-        </div>
-
-        <Toaster />
-        <Sonner position="top-center" richColors />
-      </AuthProvider>
+      <AppInner />
     </BrowserRouter>
   );
 }

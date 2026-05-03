@@ -13,15 +13,40 @@ export const ADMOB_CONFIG = {
   APP_ID: 'ca-app-pub-7234579833875016~4829778821',
 
   // ── Banners ───────────────────────────────────────────────────────
+  // Primary banner — used on feed, home, explore
   BANNER_FEED:        'ca-app-pub-7234579833875016/4099641690',
-  BANNER_PROFILE:     'ca-app-pub-7234579833875016/8657343194',
-  BANNER_EXPLORE:     'ca-app-pub-7234579833875016/3193754134',
+  // Secondary banner — used on profile, wallet, creator studio
+  BANNER_PROFILE:     'ca-app-pub-7234579833875016/4099641690',
+  // Explore / search banner
+  BANNER_EXPLORE:     'ca-app-pub-7234579833875016/4099641690',
 
   // ── Interstitial ──────────────────────────────────────────────────
+  // Full-screen ad shown between page transitions
   INTERSTITIAL:       'ca-app-pub-7234579833875016/8911947261',
 
   // ── Rewarded ──────────────────────────────────────────────────────
+  // Rewarded video ad — user watches for unlock/boost
   REWARDED:           'ca-app-pub-7234579833875016/2031881558',
+
+  // ── Native/Content Ad ─────────────────────────────────────────────
+  // Native advanced ad — rendered inside feed as a card
+  NATIVE:             'ca-app-pub-7234579833875016/3193754134',
+} as const;
+
+/**
+ * Revenue split per ad type (matches creator_ad_revenue table)
+ * Creators get 30% of attributed impressions; platform retains 70%
+ */
+export const AD_REVENUE_SPLIT = {
+  CREATOR_SHARE: 0.30,
+  PLATFORM_SHARE: 0.70,
+  // Estimated CPM (USD) per ad type — adjust as actuals come in from AdMob dashboard
+  ESTIMATED_CPM: {
+    banner: 0.80,
+    interstitial: 4.50,
+    rewarded: 8.00,
+    native: 2.50,
+  },
 } as const;
 
 let initialized = false;
@@ -44,16 +69,24 @@ export async function initAdMob() {
   if (initialized) return;
   try {
     await AdMob.initialize({
-      requestTrackingAuthorization: true,
-      initializeForTesting: false,        // PRODUCTION
+      requestTrackingAuthorization: true,   // iOS ATT prompt
+      initializeForTesting: false,           // PRODUCTION — real revenue
       tagForChildDirectedTreatment: false,
       tagForUnderAgeOfConsent: false,
     });
     initialized = true;
-    console.log('[AdMob] Initialized (production)');
-    // Silently preload heavy ad types
-    preloadInterstitial().catch(() => {});
-    preloadRewarded().catch(() => {});
+    console.log('[AdMob] Initialized — production mode (App: ca-app-pub-7234579833875016~4829778821)');
+
+    // Listen for revenue events to track creator earnings
+    AdMob.addListener('onAdImpression' as any, (info: any) => {
+      console.log('[AdMob] Impression:', info);
+    });
+
+    // Silently preload heavy ad types after short delay
+    setTimeout(() => {
+      preloadInterstitial().catch(() => {});
+      preloadRewarded().catch(() => {});
+    }, 3000);
   } catch (err) {
     console.warn('[AdMob] Init error:', err);
   }

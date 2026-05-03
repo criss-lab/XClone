@@ -4,58 +4,56 @@ import './index.css';
 import { Capacitor } from '@capacitor/core';
 
 /**
- * Boot sequence:
- * 1. Initialize AdMob with production settings (native only)
- * 2. Pre-load interstitial + rewarded ads silently
- * 3. Render React app
+ * Boot sequence (native):
+ * 1. Initialize AdMob in production mode
+ * 2. Pre-load interstitial + rewarded silently (non-blocking)
+ * 3. Render React
  *
- * We import admob lazily so web builds don't fail.
+ * AdMob IDs:
+ *   App:          ca-app-pub-7234579833875016~4829778821
+ *   Banner:       ca-app-pub-7234579833875016/4099641690
+ *   Interstitial: ca-app-pub-7234579833875016/8911947261
+ *   Rewarded:     ca-app-pub-7234579833875016/2031881558
+ *   Native:       ca-app-pub-7234579833875016/3193754134
  */
-async function boot() {
-  if (Capacitor.isNativePlatform()) {
+
+// Render React immediately — ads init in background
+const container = document.getElementById('root')!;
+const root = createRoot(container);
+root.render(<App />);
+
+// Boot AdMob after render to not block Time-To-Interactive
+if (Capacitor.isNativePlatform()) {
+  setTimeout(async () => {
     try {
-      // Dynamic import to avoid SSR / web errors
       const { AdMob } = await import('@capacitor-community/admob');
 
+      // Production initialization — no test mode
       await AdMob.initialize({
-        requestTrackingAuthorization: true, // iOS ATT
-        initializeForTesting: false,        // PRODUCTION — no test ads
+        requestTrackingAuthorization: true,   // Required for iOS 14+ ATT
+        initializeForTesting: false,           // PRODUCTION ONLY
         tagForChildDirectedTreatment: false,
         tagForUnderAgeOfConsent: false,
       });
 
-      console.log('[AdMob] Initialized in production mode');
+      console.log('[AdMob] ✓ Production initialized');
 
-      // Pre-load interstitial silently
-      try {
-        await AdMob.prepareInterstitial({
-          adId: 'ca-app-pub-7234579833875016/8911947261',
-          isTesting: false,
-        });
-        console.log('[AdMob] Interstitial pre-loaded');
-      } catch (e) {
-        console.warn('[AdMob] Interstitial preload warn:', e);
-      }
+      // Pre-load interstitial (full-screen between page transitions)
+      AdMob.prepareInterstitial({
+        adId: 'ca-app-pub-7234579833875016/8911947261',
+        isTesting: false,
+      }).then(() => console.log('[AdMob] ✓ Interstitial ready'))
+        .catch(e => console.warn('[AdMob] Interstitial preload:', e));
 
-      // Pre-load rewarded silently
-      try {
-        await AdMob.prepareRewardVideoAd({
-          adId: 'ca-app-pub-7234579833875016/2031881558',
-          isTesting: false,
-        });
-        console.log('[AdMob] Rewarded pre-loaded');
-      } catch (e) {
-        console.warn('[AdMob] Rewarded preload warn:', e);
-      }
+      // Pre-load rewarded (user watches for boost/unlock)
+      AdMob.prepareRewardVideoAd({
+        adId: 'ca-app-pub-7234579833875016/2031881558',
+        isTesting: false,
+      }).then(() => console.log('[AdMob] ✓ Rewarded ready'))
+        .catch(e => console.warn('[AdMob] Rewarded preload:', e));
+
     } catch (e) {
-      console.warn('[AdMob] Init error (non-fatal):', e);
+      console.warn('[AdMob] Boot error (non-fatal):', e);
     }
-  }
+  }, 1500); // Small delay so app renders first
 }
-
-// Start boot then render — don't await to avoid delaying React init
-boot();
-
-const container = document.getElementById('root')!;
-const root = createRoot(container);
-root.render(<App />);
