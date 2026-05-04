@@ -12,7 +12,7 @@ import { Loader2 } from 'lucide-react';
 // Capacitor
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { Capacitor } from '@capacitor/core';
-import { showInterstitial } from '@/lib/admob';
+import { showInterstitial, initAdMob } from '@/lib/admob';
 
 // Critical pages — loaded eagerly
 import HomePage from '@/pages/HomePage';
@@ -82,12 +82,18 @@ function AppInner() {
     if (!Capacitor.isNativePlatform()) return;
     (async () => {
       try {
-        await StatusBar.setStyle({ style: Style.Dark });
-        await StatusBar.setBackgroundColor({ color: '#00000000' });
+        // Full immersive edge-to-edge display
         await StatusBar.setOverlaysWebView({ overlay: true });
+        await StatusBar.setStyle({ style: Style.Dark });
+        // Transparent status bar for true immersive look
+        try {
+          await StatusBar.setBackgroundColor({ color: '#00000000' });
+        } catch (_) {}
       } catch {
         try { await StatusBar.hide(); } catch (_) {}
       }
+      // Boot AdMob after short delay so UI renders first
+      setTimeout(() => initAdMob().catch(() => {}), 3000);
     })();
   }, []);
 

@@ -1,4 +1,4 @@
-import { Heart, MessageCircle, Repeat2, Share, MoreHorizontal, BadgeCheck, Trash2, TrendingUp } from 'lucide-react';
+import { Heart, MessageCircle, Repeat2, Share, MoreHorizontal, BadgeCheck, Trash2, TrendingUp, Zap } from 'lucide-react';
 import { sendActivityNotification } from '@/components/layout/AuthProvider';
 import { Post } from '@/types';
 import { formatDistanceToNow } from 'date-fns';
@@ -14,6 +14,7 @@ import { PollCard } from './PollCard';
 import { EditPostDialog } from './EditPostDialog';
 import { BoostPostDialog } from './BoostPostDialog';
 import { OneClickBoost } from './OneClickBoost';
+import { RewardedAdBoost } from './RewardedAdBoost';
 import {
   Dialog,
   DialogContent,
@@ -40,6 +41,7 @@ export function PostCard({ post, onUpdate }: PostCardProps) {
   const [poll, setPoll] = useState<any>(null);
   const [showBoostDialog, setShowBoostDialog] = useState(false);
   const [showOneClickBoost, setShowOneClickBoost] = useState(false);
+  const [showRewardedBoost, setShowRewardedBoost] = useState(false);
 
   // Get media URLs (support both legacy single image and new multi-image)
   const mediaUrls = post.media_urls && post.media_urls.length > 0 
@@ -488,18 +490,32 @@ export function PostCard({ post, onUpdate }: PostCardProps) {
             </div>
 
             {user?.id === post.user_id && (
-              <button
-                className="flex items-center space-x-2 text-muted-foreground hover:text-primary transition-colors group"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowOneClickBoost(true);
-                }}
-                title="Boost Post"
-              >
-                <div className="p-2 rounded-full group-hover:bg-primary/10 transition-colors">
-                  <TrendingUp className="w-5 h-5" />
-                </div>
-              </button>
+              <>
+                <button
+                  className="flex items-center space-x-2 text-muted-foreground hover:text-primary transition-colors group"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowOneClickBoost(true);
+                  }}
+                  title="Boost Post"
+                >
+                  <div className="p-2 rounded-full group-hover:bg-primary/10 transition-colors">
+                    <TrendingUp className="w-5 h-5" />
+                  </div>
+                </button>
+                <button
+                  className="flex items-center space-x-2 text-muted-foreground hover:text-amber-500 transition-colors group"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowRewardedBoost(true);
+                  }}
+                  title="Free Boost (Watch Ad)"
+                >
+                  <div className="p-2 rounded-full group-hover:bg-amber-500/10 transition-colors">
+                    <Zap className="w-5 h-5" />
+                  </div>
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -536,6 +552,19 @@ export function PostCard({ post, onUpdate }: PostCardProps) {
                 postId={post.id}
                 postContent={post.content}
                 onClose={() => setShowOneClickBoost(false)}
+              />
+            </DialogContent>
+          </Dialog>
+          <Dialog open={showRewardedBoost} onOpenChange={setShowRewardedBoost}>
+            <DialogContent className="max-w-sm">
+              <DialogHeader>
+                <DialogTitle>Free Boost — Watch Ad</DialogTitle>
+              </DialogHeader>
+              <RewardedAdBoost
+                postId={post.id}
+                postContent={post.content}
+                onClose={() => setShowRewardedBoost(false)}
+                onBoostApplied={() => { setShowRewardedBoost(false); onUpdate?.(); }}
               />
             </DialogContent>
           </Dialog>

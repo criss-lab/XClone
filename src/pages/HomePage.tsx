@@ -13,6 +13,7 @@ import { Loader2, Sparkles, Hash, MessageCircle, Repeat2, Heart, RefreshCw } fro
 import { formatDistanceToNow } from 'date-fns';
 import { formatNumber } from '@/lib/utils';
 import { DynamicAd } from '@/components/features/DynamicAd';
+import { NativeAdCard } from '@/components/features/NativeAdCard';
 import { usePageBanner } from '@/hooks/usePageBanner';
 import { ADMOB_CONFIG } from '@/lib/admob';
 import { SponsoredPostCard } from '@/components/features/SponsoredPostCard';
@@ -263,7 +264,11 @@ export default function HomePage() {
                 <ThreadCard thread={item.data} />
               )}
 
-              {/* Inline ad every 8 posts — web only */}
+              {/* Native ad card every 6 posts (AdMob native unit) */}
+              {(index + 1) % 6 === 0 && index !== feedItems.length - 1 && (
+                <NativeAdCard className="mx-0 rounded-none border-x-0 border-b border-border" />
+              )}
+              {/* Web display ad every 8 posts */}
               {(index + 1) % 8 === 0 && (
                 <DynamicAd location="feed_inline" className="border-b border-border px-4 py-3" />
               )}

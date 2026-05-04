@@ -6,6 +6,7 @@ export default {
     './components/**/*.{ts,tsx}',
     './app/**/*.{ts,tsx}',
     './src/**/*.{ts,tsx}',
+    './index.html',
   ],
   prefix: '',
   theme: {
@@ -78,6 +79,10 @@ export default {
           from: { opacity: '0', transform: 'translateX(-10px)' },
           to: { opacity: '1', transform: 'translateX(0)' },
         },
+        'pulse-glow': {
+          '0%, 100%': { boxShadow: '0 0 0 0 rgba(var(--primary-rgb), 0.4)' },
+          '50%': { boxShadow: '0 0 0 8px rgba(var(--primary-rgb), 0)' },
+        },
       },
       animation: {
         'accordion-down': 'accordion-down 0.2s ease-out',
@@ -85,6 +90,7 @@ export default {
         'fade-in': 'fade-in 0.3s ease-out',
         'slide-up': 'slide-up 0.3s ease-out',
         'slide-in': 'slide-in 0.3s ease-out',
+        'pulse-glow': 'pulse-glow 2s infinite',
       },
     },
   },
