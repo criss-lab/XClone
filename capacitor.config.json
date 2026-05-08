@@ -3,6 +3,12 @@
     "appName": "T",
     "webDir": "dist",
     "bundledWebRuntime": false,
+
+    "server": {
+        "url": "https://testagram.site",
+        "cleartext": false
+    },
+
     "plugins": {
         "AdMob": {
             "appId": "ca-app-pub-7234579833875016~4829778821",
@@ -28,11 +34,13 @@
             "resizeOnFullScreen": true
         }
     },
+
     "android": {
         "allowMixedContent": true,
         "captureInput": true,
         "webContentsDebuggingEnabled": false
     },
+
     "ios": {
         "contentInset": "always",
         "allowsLinkPreview": false,
