@@ -4,11 +4,6 @@
     "webDir": "dist",
     "bundledWebRuntime": false,
 
-    "server": {
-        "url": "https://testagram.site",
-        "cleartext": false
-    },
-
     "plugins": {
         "AdMob": {
             "appId": "ca-app-pub-7234579833875016~4829778821",
