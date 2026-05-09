@@ -73,32 +73,27 @@ function PageLoader() {
 
 // ─── Inner app — has access to router context ─────────────────────────────────
 let navCount = 0;
-const INTERSTITIAL_EVERY = 5; // Show interstitial every 5 navigations
+const INTERSTITIAL_EVERY = 5;
 
 function AppInner() {
-  const location = useLocation(); // safe — inside BrowserRouter
+  const location = useLocation();
 
-  // Immersive mode on Capacitor: status bar overlays content (edge-to-edge)
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
     (async () => {
       try {
-        // Full immersive edge-to-edge display
         await StatusBar.setOverlaysWebView({ overlay: true });
         await StatusBar.setStyle({ style: Style.Dark });
-        // Transparent status bar for true immersive look
         try {
           await StatusBar.setBackgroundColor({ color: '#00000000' });
         } catch (_) {}
       } catch {
         try { await StatusBar.hide(); } catch (_) {}
       }
-      // Boot AdMob after short delay so UI renders first
       setTimeout(() => initAdMob().catch(() => {}), 3000);
     })();
   }, []);
 
-  // Revenue maximization: show interstitial every 5 page navigations
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
     navCount++;
@@ -115,12 +110,10 @@ function AppInner() {
         <main className="flex-1 max-w-2xl w-full border-x border-border overflow-x-hidden">
           <Suspense fallback={<PageLoader />}>
             <Routes>
-              {/* Critical — no lazy */}
               <Route path="/" element={<HomePage />} />
               <Route path="/auth" element={<AuthPage />} />
               <Route path="/videos" element={<VideosPage />} />
 
-              {/* Lazy-loaded routes */}
               <Route path="/explore" element={<ExplorePage />} />
               <Route path="/notifications" element={<NotificationsPage />} />
               <Route path="/messages" element={<MessagesPage />} />
@@ -173,11 +166,13 @@ function AppInner() {
 
       <Toaster />
       <Sonner position="top-center" richColors />
+
+      {/* ✅ Vercel Analytics (GLOBAL TRACKING) */}
+      <Analytics />
     </AuthProvider>
   );
 }
 
-// ─── Root — BrowserRouter wraps everything ───────────────────────────────────
 export default function App() {
   return (
     <BrowserRouter>
