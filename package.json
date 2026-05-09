@@ -71,6 +71,7 @@
     "@types/react-router-dom": "^5.3.3",
     "@uppy/core": "^5.2.0",
     "@uppy/tus": "^5.1.1",
+    "@vercel/analytics": "^2.0.1",
     "axios": "^1.15.2",
     "axios-retry": "^4.5.0",
     "chart.js": "^4.5.1",
