@@ -72,6 +72,10 @@ export const CapacitorUpdater = {
   addListener: (_event: string, _handler: any) => ({ remove: () => {} }),
 };
 
+// ── @vercel/analytics/react ─────────────────────────────────────────────────
+export const Analytics = () => null;
+export const track = () => {};
+
 // Default export (some imports use default)
 export default {
   Capacitor,

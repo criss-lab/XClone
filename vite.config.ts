@@ -27,6 +27,7 @@ export default defineConfig({
       "@capacitor-community/firebase-analytics": path.resolve(__dirname, "./src/lib/capacitor-stub.ts"),
       "@capacitor-community/media": path.resolve(__dirname, "./src/lib/capacitor-stub.ts"),
       "@capgo/capacitor-updater": path.resolve(__dirname, "./src/lib/capacitor-stub.ts"),
+      "@vercel/analytics/react": path.resolve(__dirname, "./src/lib/capacitor-stub.ts"),
     },
   },
 });
