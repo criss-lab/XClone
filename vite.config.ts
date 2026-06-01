@@ -14,6 +14,19 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      // Stub all Capacitor packages on web builds so they don't break the bundle
+      "@capacitor/core": path.resolve(__dirname, "./src/lib/capacitor-stub.ts"),
+      "@capacitor/status-bar": path.resolve(__dirname, "./src/lib/capacitor-stub.ts"),
+      "@capacitor/app": path.resolve(__dirname, "./src/lib/capacitor-stub.ts"),
+      "@capacitor/device": path.resolve(__dirname, "./src/lib/capacitor-stub.ts"),
+      "@capacitor/filesystem": path.resolve(__dirname, "./src/lib/capacitor-stub.ts"),
+      "@capacitor/network": path.resolve(__dirname, "./src/lib/capacitor-stub.ts"),
+      "@capacitor/push-notifications": path.resolve(__dirname, "./src/lib/capacitor-stub.ts"),
+      "@capacitor/share": path.resolve(__dirname, "./src/lib/capacitor-stub.ts"),
+      "@capacitor-community/admob": path.resolve(__dirname, "./src/lib/capacitor-stub.ts"),
+      "@capacitor-community/firebase-analytics": path.resolve(__dirname, "./src/lib/capacitor-stub.ts"),
+      "@capacitor-community/media": path.resolve(__dirname, "./src/lib/capacitor-stub.ts"),
+      "@capgo/capacitor-updater": path.resolve(__dirname, "./src/lib/capacitor-stub.ts"),
     },
   },
 });
