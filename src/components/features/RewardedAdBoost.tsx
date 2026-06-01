@@ -224,13 +224,15 @@ export function RewardedAdBoost({ postId, postContent, onClose, onBoostApplied }
       const estimatedRevenue = AD_REVENUE_SPLIT.ESTIMATED_CPM.rewarded / 1000;
       const creatorShare = estimatedRevenue * AD_REVENUE_SPLIT.CREATOR_SHARE;
 
-      await supabase.from('creator_earnings').insert({
-        user_id: user.id,
-        source: 'rewarded_ads',
-        amount: creatorShare,
-        post_id: postId,
-        status: 'pending',
-      }).catch(() => {});
+      try {
+        await supabase.from('creator_earnings').insert({
+          user_id: user.id,
+          source: 'rewarded_ads',
+          amount: creatorShare,
+          post_id: postId,
+          status: 'pending',
+        });
+      } catch (_earnErr) { /* non-critical */ }
 
       setBoostState('success');
       toast.success(`${selected.label} applied! +25 credits earned.`);

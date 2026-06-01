@@ -87,7 +87,7 @@ export function ProductTagDialog({ onClose, onProductSelected }: ProductTagDialo
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4">
+        <div className="flex-1 overflow-y-auto p-4 min-h-0">
           {loading ? (
             <div className="text-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
@@ -133,7 +133,7 @@ export function ProductTagDialog({ onClose, onProductSelected }: ProductTagDialo
           )}
         </div>
 
-        <div className="p-4 border-t border-border space-y-2">
+        <div className="p-4 border-t border-border space-y-2 shrink-0 bg-background">
           {products.length > 0 && (
             <button
               onClick={() => setShowCreateProduct(true)}
@@ -143,13 +143,20 @@ export function ProductTagDialog({ onClose, onProductSelected }: ProductTagDialo
               New Product
             </button>
           )}
-          <button
-            onClick={handleConfirm}
-            disabled={selectedProducts.length === 0}
-            className="w-full py-3 bg-primary text-primary-foreground rounded-lg font-semibold hover:opacity-90 transition-opacity disabled:opacity-50"
-          >
-            Tag {selectedProducts.length} Product{selectedProducts.length !== 1 ? 's' : ''}
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={onClose}
+              className="flex-1 py-3 border border-border rounded-lg font-semibold hover:bg-muted transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleConfirm}
+              className="flex-1 py-3 bg-primary text-primary-foreground rounded-lg font-semibold hover:opacity-90 transition-opacity"
+            >
+              {selectedProducts.length > 0 ? `Tag ${selectedProducts.length} Product${selectedProducts.length !== 1 ? 's' : ''}` : 'Done'}
+            </button>
+          </div>
         </div>
       </div>
     </div>
