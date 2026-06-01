@@ -12,14 +12,6 @@ export default defineConfig({
     react(),
   ],
   optimizeDeps: {
-    include: [
-      '@supabase/supabase-js',
-      '@supabase/postgrest-js',
-      '@supabase/realtime-js',
-      '@supabase/storage-js',
-      '@supabase/functions-js',
-      '@supabase/auth-js',
-    ],
     exclude: [
       '@capacitor/core',
       '@capacitor/status-bar',
@@ -27,11 +19,6 @@ export default defineConfig({
       '@capacitor-community/admob',
       '@capgo/capacitor-updater',
     ],
-  },
-  build: {
-    commonjsOptions: {
-      transformMixedEsModules: true,
-    },
   },
   resolve: {
     alias: {
