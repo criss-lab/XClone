@@ -21,7 +21,7 @@ const BOOST_OPTIONS = [
   {
     id: 'reach',
     label: 'Reach Boost',
-    description: 'Increase post reach by 2× for 24 hours',
+    description: 'Increase post reach by 2× for 1 hour',
     rewardType: 'reach_boost',
     rewardAmount: 1,
     icon: TrendingUp,
@@ -32,7 +32,7 @@ const BOOST_OPTIONS = [
   {
     id: 'featured',
     label: 'Featured Spot',
-    description: 'Pin post to Explore for 12 hours',
+    description: 'Pin post to Explore for 1 hour',
     rewardType: 'featured_boost',
     rewardAmount: 2,
     icon: Star,
@@ -43,7 +43,7 @@ const BOOST_OPTIONS = [
   {
     id: 'viral',
     label: 'Viral Push',
-    description: 'Push to 5× more follower feeds',
+    description: 'Push to 5× more follower feeds for 1 hour',
     rewardType: 'viral_boost',
     rewardAmount: 3,
     icon: Zap,
@@ -177,8 +177,9 @@ export function RewardedAdBoost({ postId, postContent, onClose, onBoostApplied }
     if (!user) return;
 
     try {
+      // Ad-rewarded boosts last 1 hour only
       const expiresAt = new Date();
-      expiresAt.setHours(expiresAt.getHours() + (selected.id === 'featured' ? 12 : 24));
+      expiresAt.setHours(expiresAt.getHours() + 1);
 
       // Record the reward unlock
       await supabase.from('rewarded_ad_unlocks').insert({
@@ -254,8 +255,7 @@ export function RewardedAdBoost({ postId, postContent, onClose, onBoostApplied }
         <div className="text-center">
           <h3 className="font-bold text-lg text-foreground mb-1">{selected.label} Applied!</h3>
           <p className="text-sm text-muted-foreground">
-            Your post is boosted for the next{' '}
-            {selected.id === 'featured' ? '12' : '24'} hours.
+            Your post reach is boosted for the next 1 hour.
           </p>
           <div className="mt-3 flex items-center justify-center gap-2 text-green-600 font-semibold">
             <Coins className="w-4 h-4" />

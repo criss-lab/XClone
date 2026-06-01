@@ -544,15 +544,17 @@ export function PostCard({ post, onUpdate }: PostCardProps) {
             postId={post.id}
           />
           <Dialog open={showOneClickBoost} onOpenChange={setShowOneClickBoost}>
-            <DialogContent className="max-w-lg">
-              <DialogHeader>
+            <DialogContent className="max-w-lg max-h-[92vh] flex flex-col p-0 overflow-hidden">
+              <DialogHeader className="px-6 pt-5 pb-2 shrink-0 border-b border-border">
                 <DialogTitle>Boost Your Post</DialogTitle>
               </DialogHeader>
-              <OneClickBoost
-                postId={post.id}
-                postContent={post.content}
-                onClose={() => setShowOneClickBoost(false)}
-              />
+              <div className="overflow-y-auto flex-1 px-6 py-4">
+                <OneClickBoost
+                  postId={post.id}
+                  postContent={post.content}
+                  onClose={() => setShowOneClickBoost(false)}
+                />
+              </div>
             </DialogContent>
           </Dialog>
           <Dialog open={showRewardedBoost} onOpenChange={setShowRewardedBoost}>

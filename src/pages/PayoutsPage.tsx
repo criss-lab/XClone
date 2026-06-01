@@ -276,6 +276,9 @@ export default function PayoutsPage() {
     );
   }
 
+  // Also allow users with $0 balance to still see their history and set up schedule
+  const isEligibleForPayout = available >= 1;
+
   const available = monetization?.pending_user_payout || 0;
   const userSharePct = monetization?.user_share_percentage || 30;
   const platformSharePct = monetization?.platform_share_percentage || 70;
@@ -515,9 +518,15 @@ export default function PayoutsPage() {
                 </div>
               )}
 
+              {!isEligibleForPayout && (
+                <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-3 text-sm text-amber-700 dark:text-amber-400">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>Minimum payout is $1.00. Keep creating content to earn more!</span>
+                </div>
+              )}
               <Button
                 onClick={handleWithdraw}
-                disabled={!withdrawAmount || parseFloat(withdrawAmount) > available || parseFloat(withdrawAmount) <= 0}
+                disabled={!isEligibleForPayout || !withdrawAmount || parseFloat(withdrawAmount) > available || parseFloat(withdrawAmount) <= 0}
                 className={`w-full h-12 font-bold text-white ${payoutMethod === 'mpesa' ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'}`}
               >
                 <ArrowUpRight className="w-4 h-4 mr-2" />
