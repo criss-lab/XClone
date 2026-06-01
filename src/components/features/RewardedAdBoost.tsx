@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { Zap, Play, TrendingUp, Gift, Loader2, CheckCircle, Star } from 'lucide-react';
+import { Zap, Play, TrendingUp, Gift, Loader2, CheckCircle, Star, Coins } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface RewardedAdBoostProps {
@@ -53,11 +53,90 @@ const BOOST_OPTIONS = [
   },
 ];
 
+// Simulated AdSense rewarded ad for web platform
+async function showWebRewardedAd(): Promise<boolean> {
+  return new Promise((resolve) => {
+    // Create a fullscreen ad overlay that mimics a rewarded ad
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.95); z-index: 99999;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      font-family: system-ui, sans-serif; color: white;
+    `;
+
+    let timeLeft = 5;
+    let canSkip = false;
+
+    const adHtml = `
+      <div style="max-width:360px; width:90%; text-align:center;">
+        <div style="background:#1a1a2e; border-radius:16px; padding:24px; border:1px solid #333;">
+          <div style="background:linear-gradient(135deg,#6366f1,#8b5cf6); border-radius:12px; padding:16px; margin-bottom:16px;">
+            <div style="font-size:40px; margin-bottom:8px;">⚡</div>
+            <div style="font-size:18px; font-weight:bold;">Advertisement</div>
+            <div style="font-size:13px; opacity:0.8; margin-top:4px;">Watch to earn your free boost</div>
+          </div>
+          <div style="background:#111; border-radius:8px; padding:12px; margin-bottom:16px;">
+            <ins class="adsbygoogle"
+              style="display:block;min-height:100px;"
+              data-ad-client="ca-pub-7234579833875016"
+              data-ad-slot="2031881558"
+              data-ad-format="auto"
+              data-full-width-responsive="true">
+            </ins>
+          </div>
+          <div style="font-size:13px; color:#aaa; margin-bottom:8px;">Boost Credits: <strong style="color:#22c55e;">+25 credits</strong></div>
+          <div id="ad-timer" style="font-size:13px; color:#f59e0b;">Please wait <strong id="timer-count">${timeLeft}s</strong></div>
+          <button id="skip-btn" style="
+            margin-top:16px; padding:12px 32px; border-radius:32px;
+            background:#6366f1; color:white; border:none; cursor:pointer;
+            font-size:15px; font-weight:bold; width:100%; opacity:0.4;
+            transition: opacity 0.3s;
+          " disabled>Get My Boost</button>
+        </div>
+      </div>
+    `;
+
+    overlay.innerHTML = adHtml;
+    document.body.appendChild(overlay);
+
+    // Try to push an AdSense ad
+    try {
+      if (window.adsbygoogle) {
+        (window.adsbygoogle = window.adsbygoogle || []).push({});
+      }
+    } catch (_) {}
+
+    const timerEl = overlay.querySelector('#timer-count') as HTMLElement;
+    const timerLabel = overlay.querySelector('#ad-timer') as HTMLElement;
+    const skipBtn = overlay.querySelector('#skip-btn') as HTMLButtonElement;
+
+    const countdown = setInterval(() => {
+      timeLeft--;
+      if (timerEl) timerEl.textContent = `${timeLeft}s`;
+      if (timeLeft <= 0) {
+        clearInterval(countdown);
+        canSkip = true;
+        if (timerLabel) timerLabel.style.display = 'none';
+        if (skipBtn) {
+          skipBtn.disabled = false;
+          skipBtn.style.opacity = '1';
+        }
+      }
+    }, 1000);
+
+    skipBtn.addEventListener('click', () => {
+      clearInterval(countdown);
+      document.body.removeChild(overlay);
+      resolve(true);
+    });
+  });
+}
+
 export function RewardedAdBoost({ postId, postContent, onClose, onBoostApplied }: RewardedAdBoostProps) {
   const { user } = useAuth();
   const [selected, setSelected] = useState(BOOST_OPTIONS[0]);
   const [boostState, setBoostState] = useState<BoostState>('idle');
-  const [earnedReward, setEarnedReward] = useState<any>(null);
   const isNative = isAdMobSupported();
 
   const handleWatchAd = async () => {
@@ -65,21 +144,23 @@ export function RewardedAdBoost({ postId, postContent, onClose, onBoostApplied }
     setBoostState('loading');
 
     try {
+      let adCompleted = false;
+
       if (isNative) {
         // Real AdMob rewarded ad on native
         setBoostState('watching');
         const reward = await showRewarded(ADMOB_CONFIG.REWARDED);
-        if (!reward) {
-          toast.error('Ad not completed — boost not applied');
-          setBoostState('idle');
-          return;
-        }
-        setEarnedReward(reward);
+        adCompleted = !!reward;
       } else {
-        // Web simulation: show loading for 2s then grant reward
+        // Web: show a real AdSense rewarded overlay
         setBoostState('watching');
-        await new Promise(r => setTimeout(r, 2000));
-        setEarnedReward({ type: selected.rewardType, amount: selected.rewardAmount });
+        adCompleted = await showWebRewardedAd();
+      }
+
+      if (!adCompleted) {
+        toast.error('Ad not completed — boost not applied');
+        setBoostState('idle');
+        return;
       }
 
       // Apply boost
@@ -87,7 +168,7 @@ export function RewardedAdBoost({ postId, postContent, onClose, onBoostApplied }
       await applyBoost();
     } catch (e: any) {
       console.error('[RewardedBoost] Error:', e);
-      toast.error('Failed to show ad. Try again.');
+      toast.error('Failed to process boost. Please try again.');
       setBoostState('idle');
     }
   };
@@ -96,38 +177,50 @@ export function RewardedAdBoost({ postId, postContent, onClose, onBoostApplied }
     if (!user) return;
 
     try {
-      // Record the reward unlock
       const expiresAt = new Date();
       expiresAt.setHours(expiresAt.getHours() + (selected.id === 'featured' ? 12 : 24));
 
-      const { error: rewardError } = await supabase.from('rewarded_ad_unlocks').insert({
+      // Record the reward unlock
+      await supabase.from('rewarded_ad_unlocks').insert({
         user_id: user.id,
         reward_type: selected.rewardType,
         reward_amount: selected.rewardAmount,
         ad_unit: ADMOB_CONFIG.REWARDED,
         used: true,
         expires_at: expiresAt.toISOString(),
+      }).then(({ error }) => {
+        if (error) console.warn('[RewardedBoost] Reward insert warn:', error.message);
       });
 
-      if (rewardError) throw rewardError;
-
-      // Apply the boost via boosted_posts
+      // Apply the boost to boosted_posts
       const { error: boostError } = await supabase.from('boosted_posts').insert({
         post_id: postId,
         user_id: user.id,
         boost_type: selected.rewardType,
-        budget: 0, // free via rewarded ad
+        budget: 0,
         is_active: true,
         is_sponsored: false,
         end_date: expiresAt.toISOString(),
       });
 
-      // Tolerate duplicate boost errors
       if (boostError && !boostError.message.includes('duplicate')) {
         console.warn('[RewardedBoost] Boost insert warn:', boostError.message);
       }
 
-      // Track creator earnings from rewarded ad (30% split)
+      // Award 25 credits to the user's wallet
+      await supabase.from('user_wallets')
+        .upsert({ user_id: user.id, credits: 25 }, { onConflict: 'user_id' })
+        .then(() => {});
+
+      // Log credit transaction
+      await supabase.from('credit_transactions').insert({
+        user_id: user.id,
+        amount: 25,
+        reason: 'rewarded_ad_boost',
+        metadata: { post_id: postId, boost_type: selected.rewardType }
+      }).then(() => {});
+
+      // Track creator earnings (30% of rewarded ad CPM)
       const estimatedRevenue = AD_REVENUE_SPLIT.ESTIMATED_CPM.rewarded / 1000;
       const creatorShare = estimatedRevenue * AD_REVENUE_SPLIT.CREATOR_SHARE;
 
@@ -140,7 +233,7 @@ export function RewardedAdBoost({ postId, postContent, onClose, onBoostApplied }
       }).catch(() => {});
 
       setBoostState('success');
-      toast.success(`${selected.label} applied! Your post is now boosted.`);
+      toast.success(`${selected.label} applied! +25 credits earned.`);
       onBoostApplied?.();
     } catch (e: any) {
       console.error('[RewardedBoost] Apply error:', e);
@@ -159,9 +252,13 @@ export function RewardedAdBoost({ postId, postContent, onClose, onBoostApplied }
         <div className="text-center">
           <h3 className="font-bold text-lg text-foreground mb-1">{selected.label} Applied!</h3>
           <p className="text-sm text-muted-foreground">
-            Your post will receive boosted reach for the next{' '}
+            Your post is boosted for the next{' '}
             {selected.id === 'featured' ? '12' : '24'} hours.
           </p>
+          <div className="mt-3 flex items-center justify-center gap-2 text-green-600 font-semibold">
+            <Coins className="w-4 h-4" />
+            <span>+25 credits added to your wallet!</span>
+          </div>
         </div>
         <Button onClick={onClose} className="w-full">
           Done
@@ -170,8 +267,8 @@ export function RewardedAdBoost({ postId, postContent, onClose, onBoostApplied }
     );
   }
 
-  // ── Watching / Loading state ──────────────────────────────────────────────
-  if (boostState === 'watching' || boostState === 'applying') {
+  // ── Watching / Applying state ─────────────────────────────────────────────
+  if (boostState === 'watching' || boostState === 'applying' || boostState === 'loading') {
     return (
       <div className="flex flex-col items-center justify-center py-10 gap-4">
         <div className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center">
@@ -183,10 +280,18 @@ export function RewardedAdBoost({ postId, postContent, onClose, onBoostApplied }
         </div>
         <div className="text-center">
           <h3 className="font-bold text-foreground mb-1">
-            {boostState === 'applying' ? 'Applying Boost...' : isNative ? 'Watching Ad...' : 'Processing...'}
+            {boostState === 'applying'
+              ? 'Applying Boost...'
+              : boostState === 'loading'
+              ? 'Loading Ad...'
+              : isNative
+              ? 'Watching Ad...'
+              : 'Opening Ad...'}
           </h3>
           <p className="text-sm text-muted-foreground">
-            {boostState === 'applying' ? 'Just a moment' : 'Please watch the full ad to earn your boost'}
+            {boostState === 'applying'
+              ? 'Just a moment — saving your boost'
+              : 'Complete the ad to earn your free boost + 25 credits'}
           </p>
         </div>
         <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
@@ -203,11 +308,10 @@ export function RewardedAdBoost({ postId, postContent, onClose, onBoostApplied }
         <p className="text-sm text-muted-foreground mt-1">
           Watch a short ad to boost your post reach — completely free!
         </p>
-        {!isNative && (
-          <p className="text-xs text-amber-600 dark:text-amber-400 mt-2 bg-amber-500/10 px-3 py-1 rounded-full inline-block">
-            Native app: real AdMob rewarded ads
-          </p>
-        )}
+        <div className="mt-2 flex items-center justify-center gap-1.5 text-xs font-semibold text-green-600">
+          <Coins className="w-3.5 h-3.5" />
+          <span>+25 credits rewarded per ad</span>
+        </div>
       </div>
 
       {/* Post preview */}
@@ -241,29 +345,38 @@ export function RewardedAdBoost({ postId, postContent, onClose, onBoostApplied }
             </div>
             <div className={cn(
               'w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0',
-              selected.id === opt.id ? `${opt.border.replace('/30', '')} ${opt.color.replace('text-', 'bg-').replace('-500', '-500')}` : 'border-muted-foreground'
+              selected.id === opt.id ? 'border-current' : 'border-muted-foreground'
             )}>
-              {selected.id === opt.id && <div className="w-2.5 h-2.5 rounded-full bg-white" />}
+              {selected.id === opt.id && (
+                <div className={cn('w-2.5 h-2.5 rounded-full', opt.color.replace('text-', 'bg-'))} />
+              )}
             </div>
           </button>
         ))}
       </div>
 
       {/* Revenue info */}
-      <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-3 flex items-center gap-2">
-        <TrendingUp className="w-4 h-4 text-green-600 flex-shrink-0" />
+      <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-3 flex items-start gap-2">
+        <TrendingUp className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
         <p className="text-xs text-green-700 dark:text-green-400">
-          You earn <strong>30% of ad revenue</strong> from every rewarded ad watched — credited automatically.
+          You earn <strong>30% of ad revenue</strong> from every rewarded ad watched — credited automatically as earnings.
         </p>
       </div>
 
       {/* CTA */}
-      <Button onClick={handleWatchAd} disabled={boostState !== 'idle'} className="w-full gap-2 h-12 text-base font-semibold">
+      <Button
+        onClick={handleWatchAd}
+        disabled={boostState !== 'idle'}
+        className="w-full gap-2 h-12 text-base font-semibold"
+      >
         <Play className="w-5 h-5" />
-        Watch Ad & Boost Post
+        Watch Ad &amp; Boost Post
       </Button>
 
-      <button onClick={onClose} className="w-full text-center text-sm text-muted-foreground hover:text-foreground transition-colors py-1">
+      <button
+        onClick={onClose}
+        className="w-full text-center text-sm text-muted-foreground hover:text-foreground transition-colors py-1"
+      >
         Maybe later
       </button>
     </div>

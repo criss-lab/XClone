@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { Capacitor } from '@capacitor/core';
-import { AdMob, AdOptions } from '@capacitor-community/admob';
 import { ADMOB_CONFIG, AD_REVENUE_SPLIT, isAdMobSupported, initAdMob } from '@/lib/admob';
 import { Sparkles, ExternalLink, X } from 'lucide-react';
+import { AdSenseAd } from '@/components/features/AdSenseAd';
 
 interface NativeAdCardProps {
   onClose?: () => void;
@@ -86,6 +86,16 @@ export function NativeAdCard({ onClose, className = '' }: NativeAdCardProps) {
     setVisible(false);
     onClose?.();
   };
+
+  // On web, render AdSense directly instead of simulated ad cards
+  const isNative = isAdMobSupported();
+  if (!isNative && !Capacitor.isNativePlatform()) {
+    return (
+      <div className={`${className} px-2 py-2`}>
+        <AdSenseAd adSlot="3193754134" adFormat="auto" fullWidthResponsive />
+      </div>
+    );
+  }
 
   if (!visible) return null;
 
