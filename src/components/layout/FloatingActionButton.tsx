@@ -11,8 +11,9 @@ export function FloatingActionButton() {
 
   if (!user) return null;
 
-  // Don't show on auth page or specific pages
-  if (location.pathname === '/auth') return null;
+  // Don't show on auth page, messages page, or AI page (they have their own input areas)
+  const hiddenRoutes = ['/auth', '/messages', '/ai'];
+  if (hiddenRoutes.some(r => location.pathname.startsWith(r))) return null;
 
   const actions = [
     {

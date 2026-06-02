@@ -7,50 +7,50 @@ interface GifPickerProps {
   onClose: () => void;
 }
 
-// Tenor API v2 - free key
-const TENOR_API_KEY = 'AIzaSyAyimkuYQYF_FXVALexPuGQctUWRje-Yic';
-const TENOR_API_URL = 'https://tenor.googleapis.com/v2';
-
-// Static fallback GIFs (popular animated GIFs from Giphy CDN — always work)
-const FALLBACK_GIFS: Record<string, { id: string; url: string; preview: string }[]> = {
-  trending: [
-    { id: 'f1', url: 'https://media.giphy.com/media/3o7buirYcmV5nSwIRW/giphy.gif', preview: 'https://media.giphy.com/media/3o7buirYcmV5nSwIRW/giphy-downsized-small.gif' },
-    { id: 'f2', url: 'https://media.giphy.com/media/l4FGuhL4U2WyjdkaY/giphy.gif', preview: 'https://media.giphy.com/media/l4FGuhL4U2WyjdkaY/giphy-downsized-small.gif' },
-    { id: 'f3', url: 'https://media.giphy.com/media/xT9IgG50Lg7russbDa/giphy.gif', preview: 'https://media.giphy.com/media/xT9IgG50Lg7russbDa/giphy-downsized-small.gif' },
-    { id: 'f4', url: 'https://media.giphy.com/media/1xVbRS6j52YSzp9P7N/giphy.gif', preview: 'https://media.giphy.com/media/1xVbRS6j52YSzp9P7N/giphy-downsized-small.gif' },
-    { id: 'f5', url: 'https://media.giphy.com/media/3oEjHFOscgNwdSIIIW/giphy.gif', preview: 'https://media.giphy.com/media/3oEjHFOscgNwdSIIIW/giphy-downsized-small.gif' },
-    { id: 'f6', url: 'https://media.giphy.com/media/l3vR85wkY0bOLgEZW/giphy.gif', preview: 'https://media.giphy.com/media/l3vR85wkY0bOLgEZW/giphy-downsized-small.gif' },
-  ],
-  happy: [
-    { id: 'h1', url: 'https://media.giphy.com/media/3oEjHAUOqG3lSS0f1C/giphy.gif', preview: 'https://media.giphy.com/media/3oEjHAUOqG3lSS0f1C/giphy-downsized-small.gif' },
-    { id: 'h2', url: 'https://media.giphy.com/media/5GoVLqeAOo6PK/giphy.gif', preview: 'https://media.giphy.com/media/5GoVLqeAOo6PK/giphy-downsized-small.gif' },
-    { id: 'h3', url: 'https://media.giphy.com/media/MDJ9IbxxvDUQM/giphy.gif', preview: 'https://media.giphy.com/media/MDJ9IbxxvDUQM/giphy-downsized-small.gif' },
-    { id: 'h4', url: 'https://media.giphy.com/media/11sBLVxNs7v6WA/giphy.gif', preview: 'https://media.giphy.com/media/11sBLVxNs7v6WA/giphy-downsized-small.gif' },
-  ],
-  love: [
-    { id: 'l1', url: 'https://media.giphy.com/media/3oEdvaQMNAZFcGnRFS/giphy.gif', preview: 'https://media.giphy.com/media/3oEdvaQMNAZFcGnRFS/giphy-downsized-small.gif' },
-    { id: 'l2', url: 'https://media.giphy.com/media/d86kftzaeizO8/giphy.gif', preview: 'https://media.giphy.com/media/d86kftzaeizO8/giphy-downsized-small.gif' },
-    { id: 'l3', url: 'https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif', preview: 'https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy-downsized-small.gif' },
-  ],
-  sad: [
-    { id: 's1', url: 'https://media.giphy.com/media/9Y5BbDSkSTiY8/giphy.gif', preview: 'https://media.giphy.com/media/9Y5BbDSkSTiY8/giphy-downsized-small.gif' },
-    { id: 's2', url: 'https://media.giphy.com/media/eveLqe2MKqVQfCGzl7/giphy.gif', preview: 'https://media.giphy.com/media/eveLqe2MKqVQfCGzl7/giphy-downsized-small.gif' },
-  ],
-  excited: [
-    { id: 'e1', url: 'https://media.giphy.com/media/5xaOcLGvzHxDKjufnLW/giphy.gif', preview: 'https://media.giphy.com/media/5xaOcLGvzHxDKjufnLW/giphy-downsized-small.gif' },
-    { id: 'e2', url: 'https://media.giphy.com/media/Is1O1TWV0LEJi/giphy.gif', preview: 'https://media.giphy.com/media/Is1O1TWV0LEJi/giphy-downsized-small.gif' },
-  ],
-  dance: [
-    { id: 'd1', url: 'https://media.giphy.com/media/l0Iy2MnL9ejDrf73i/giphy.gif', preview: 'https://media.giphy.com/media/l0Iy2MnL9ejDrf73i/giphy-downsized-small.gif' },
-    { id: 'd2', url: 'https://media.giphy.com/media/3oEjHSGBxEBBMSoaSQ/giphy.gif', preview: 'https://media.giphy.com/media/3oEjHSGBxEBBMSoaSQ/giphy-downsized-small.gif' },
-  ],
-};
-
 interface GifItem {
   id: string;
   url: string;
   preview: string;
+  title?: string;
 }
+
+// Tenor API v2
+const TENOR_API_KEY = 'AIzaSyAyimkuYQYF_FXVALexPuGQctUWRje-Yic';
+const TENOR_API_URL = 'https://tenor.googleapis.com/v2';
+
+// Reliable static GIF collection using direct media URLs (not Giphy CDN which blocks cross-origin)
+const STATIC_GIFS: Record<string, GifItem[]> = {
+  trending: [
+    { id: 'st1', url: 'https://media.tenor.com/YUBpDMVYYJQAAAAC/cute-cat.gif', preview: 'https://media.tenor.com/YUBpDMVYYJQAAAAC/cute-cat.gif', title: 'Cute Cat' },
+    { id: 'st2', url: 'https://media.tenor.com/g1wnWqFkOA8AAAAC/dog-funny.gif', preview: 'https://media.tenor.com/g1wnWqFkOA8AAAAC/dog-funny.gif', title: 'Funny Dog' },
+    { id: 'st3', url: 'https://media.tenor.com/yPg-fzjnMF0AAAAC/thumbs-up-meme.gif', preview: 'https://media.tenor.com/yPg-fzjnMF0AAAAC/thumbs-up-meme.gif', title: 'Thumbs Up' },
+    { id: 'st4', url: 'https://media.tenor.com/gEHGAn5XJZYAAAAC/happy-dance.gif', preview: 'https://media.tenor.com/gEHGAn5XJZYAAAAC/happy-dance.gif', title: 'Happy Dance' },
+    { id: 'st5', url: 'https://media.tenor.com/FD9PbgJbFOEAAAAC/wow-really.gif', preview: 'https://media.tenor.com/FD9PbgJbFOEAAAAC/wow-really.gif', title: 'Wow' },
+    { id: 'st6', url: 'https://media.tenor.com/eTBE3cXvhJsAAAAC/laughing-lol.gif', preview: 'https://media.tenor.com/eTBE3cXvhJsAAAAC/laughing-lol.gif', title: 'LOL' },
+  ],
+  happy: [
+    { id: 'ha1', url: 'https://media.tenor.com/gEHGAn5XJZYAAAAC/happy-dance.gif', preview: 'https://media.tenor.com/gEHGAn5XJZYAAAAC/happy-dance.gif', title: 'Happy Dance' },
+    { id: 'ha2', url: 'https://media.tenor.com/eTBE3cXvhJsAAAAC/laughing-lol.gif', preview: 'https://media.tenor.com/eTBE3cXvhJsAAAAC/laughing-lol.gif', title: 'Laughing' },
+    { id: 'ha3', url: 'https://media.tenor.com/yPg-fzjnMF0AAAAC/thumbs-up-meme.gif', preview: 'https://media.tenor.com/yPg-fzjnMF0AAAAC/thumbs-up-meme.gif', title: 'Thumbs Up' },
+    { id: 'ha4', url: 'https://media.tenor.com/g1wnWqFkOA8AAAAC/dog-funny.gif', preview: 'https://media.tenor.com/g1wnWqFkOA8AAAAC/dog-funny.gif', title: 'Funny' },
+  ],
+  love: [
+    { id: 'lv1', url: 'https://media.tenor.com/YUBpDMVYYJQAAAAC/cute-cat.gif', preview: 'https://media.tenor.com/YUBpDMVYYJQAAAAC/cute-cat.gif', title: 'Cute' },
+    { id: 'lv2', url: 'https://media.tenor.com/FD9PbgJbFOEAAAAC/wow-really.gif', preview: 'https://media.tenor.com/FD9PbgJbFOEAAAAC/wow-really.gif', title: 'Wow' },
+  ],
+  sad: [
+    { id: 'sa1', url: 'https://media.tenor.com/eTBE3cXvhJsAAAAC/laughing-lol.gif', preview: 'https://media.tenor.com/eTBE3cXvhJsAAAAC/laughing-lol.gif', title: 'Sad' },
+    { id: 'sa2', url: 'https://media.tenor.com/g1wnWqFkOA8AAAAC/dog-funny.gif', preview: 'https://media.tenor.com/g1wnWqFkOA8AAAAC/dog-funny.gif', title: 'Dog' },
+  ],
+  excited: [
+    { id: 'ex1', url: 'https://media.tenor.com/gEHGAn5XJZYAAAAC/happy-dance.gif', preview: 'https://media.tenor.com/gEHGAn5XJZYAAAAC/happy-dance.gif', title: 'Dance' },
+    { id: 'ex2', url: 'https://media.tenor.com/FD9PbgJbFOEAAAAC/wow-really.gif', preview: 'https://media.tenor.com/FD9PbgJbFOEAAAAC/wow-really.gif', title: 'Wow' },
+  ],
+  dance: [
+    { id: 'da1', url: 'https://media.tenor.com/gEHGAn5XJZYAAAAC/happy-dance.gif', preview: 'https://media.tenor.com/gEHGAn5XJZYAAAAC/happy-dance.gif', title: 'Dance' },
+    { id: 'da2', url: 'https://media.tenor.com/eTBE3cXvhJsAAAAC/laughing-lol.gif', preview: 'https://media.tenor.com/eTBE3cXvhJsAAAAC/laughing-lol.gif', title: 'Laugh' },
+  ],
+};
 
 export function GifPicker({ onSelect, onClose }: GifPickerProps) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -75,31 +75,50 @@ export function GifPicker({ onSelect, onClose }: GifPickerProps) {
   }, [selectedCategory]);
 
   const loadFallback = (category: string) => {
-    const key = category in FALLBACK_GIFS ? category : 'trending';
-    setGifs(FALLBACK_GIFS[key] || FALLBACK_GIFS.trending);
+    const key = category in STATIC_GIFS ? category : 'trending';
+    setGifs(STATIC_GIFS[key] || STATIC_GIFS.trending);
     setUsingFallback(true);
+  };
+
+  const parseTenorResponse = (data: any): GifItem[] => {
+    if (!data.results || data.results.length === 0) return [];
+    return data.results.map((gif: any) => {
+      // Prefer tinygif for preview, gif for full URL
+      const gifFmt = gif.media_formats?.gif;
+      const tinyFmt = gif.media_formats?.tinygif;
+      const nanogifFmt = gif.media_formats?.nanogif;
+
+      const url = gifFmt?.url || tinyFmt?.url || '';
+      const preview = tinyFmt?.url || nanogifFmt?.url || gifFmt?.url || '';
+
+      return { id: gif.id, url, preview, title: gif.content_description || '' };
+    }).filter((g: GifItem) => g.url);
   };
 
   const fetchGifs = async (query?: string) => {
     setLoading(true);
     setUsingFallback(false);
+
     try {
       const cat = categories.find(c => c.id === selectedCategory);
-      const searchTerm = query || (selectedCategory === 'trending' ? '' : cat?.query || '');
+      const searchTerm = query !== undefined ? query : (selectedCategory === 'trending' ? '' : (cat?.query || ''));
+
       const endpoint = searchTerm
-        ? `${TENOR_API_URL}/search?q=${encodeURIComponent(searchTerm)}&key=${TENOR_API_KEY}&client_key=t_social&limit=20`
-        : `${TENOR_API_URL}/featured?key=${TENOR_API_KEY}&client_key=t_social&limit=20`;
+        ? `${TENOR_API_URL}/search?q=${encodeURIComponent(searchTerm)}&key=${TENOR_API_KEY}&client_key=testagram_social&limit=24&media_filter=gif,tinygif,nanogif`
+        : `${TENOR_API_URL}/featured?key=${TENOR_API_KEY}&client_key=testagram_social&limit=24&media_filter=gif,tinygif,nanogif`;
 
-      const response = await fetch(endpoint);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000);
+
+      const response = await fetch(endpoint, { signal: controller.signal });
+      clearTimeout(timeout);
+
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const data = await response.json();
 
-      if (data.results && data.results.length > 0) {
-        const mapped: GifItem[] = data.results.map((gif: any) => ({
-          id: gif.id,
-          url: gif.media_formats?.gif?.url || gif.media_formats?.tinygif?.url || '',
-          preview: gif.media_formats?.tinygif?.url || gif.media_formats?.gif?.url || '',
-        })).filter((g: GifItem) => g.url);
+      const data = await response.json();
+      const mapped = parseTenorResponse(data);
+
+      if (mapped.length > 0) {
         setGifs(mapped);
       } else {
         loadFallback(query ? 'trending' : selectedCategory);
@@ -114,29 +133,25 @@ export function GifPicker({ onSelect, onClose }: GifPickerProps) {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    if (searchQuery.trim()) {
-      fetchGifs(searchQuery.trim());
-    } else {
-      fetchGifs();
-    }
+    fetchGifs(searchQuery.trim() || undefined);
   };
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-50">
-      <div className="bg-background w-full md:max-w-2xl md:rounded-xl max-h-[85vh] md:max-h-[70vh] flex flex-col overflow-hidden rounded-t-xl">
+      <div className="bg-background w-full md:max-w-2xl md:rounded-xl max-h-[88vh] md:max-h-[72vh] flex flex-col overflow-hidden rounded-t-2xl">
+
+        {/* Header */}
         <div className="p-4 border-b border-border flex items-center justify-between shrink-0">
           <h2 className="text-xl font-bold">Choose a GIF</h2>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-muted rounded-full transition-colors"
-          >
+          <button onClick={onClose} className="p-2 hover:bg-muted rounded-full transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="p-4 border-b border-border shrink-0">
+        {/* Search */}
+        <div className="p-3 border-b border-border shrink-0">
           <form onSubmit={handleSearch} className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
             <Input
               type="text"
               placeholder="Search for GIFs..."
@@ -147,28 +162,27 @@ export function GifPicker({ onSelect, onClose }: GifPickerProps) {
           </form>
         </div>
 
-        <div className="px-4 py-3 border-b border-border overflow-x-auto shrink-0">
+        {/* Categories */}
+        <div className="px-4 py-2 border-b border-border overflow-x-auto shrink-0 scrollbar-hide">
           <div className="flex gap-2">
-            {categories.map((category) => (
+            {categories.map((cat) => (
               <button
-                key={category.id}
-                onClick={() => {
-                  setSelectedCategory(category.id);
-                  setSearchQuery('');
-                }}
-                className={`px-4 py-2 rounded-full whitespace-nowrap text-sm font-medium transition-colors ${
-                  selectedCategory === category.id
+                key={cat.id}
+                onClick={() => { setSelectedCategory(cat.id); setSearchQuery(''); }}
+                className={`px-4 py-2 rounded-full whitespace-nowrap text-sm font-medium transition-colors shrink-0 ${
+                  selectedCategory === cat.id
                     ? 'bg-primary text-primary-foreground'
                     : 'bg-muted hover:bg-muted/80'
                 }`}
               >
-                {category.label}
+                {cat.label}
               </button>
             ))}
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 min-h-0">
+        {/* GIF Grid */}
+        <div className="flex-1 overflow-y-auto p-3 min-h-0">
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -182,28 +196,23 @@ export function GifPicker({ onSelect, onClose }: GifPickerProps) {
           ) : (
             <>
               {usingFallback && (
-                <p className="text-xs text-muted-foreground text-center mb-3">
-                  Showing popular GIFs
-                </p>
+                <p className="text-xs text-muted-foreground text-center mb-3">Showing popular GIFs</p>
               )}
               <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                 {gifs.map((gif) => (
                   <button
                     key={gif.id}
-                    onClick={() => {
-                      onSelect(gif.url);
-                      onClose();
-                    }}
-                    className="relative aspect-square rounded-lg overflow-hidden bg-muted hover:ring-2 hover:ring-primary transition-all group"
+                    onClick={() => { onSelect(gif.url); onClose(); }}
+                    className="relative aspect-square rounded-xl overflow-hidden bg-muted hover:ring-2 hover:ring-primary transition-all group"
                   >
                     <img
-                      src={gif.preview}
-                      alt="GIF"
+                      src={gif.preview || gif.url}
+                      alt={gif.title || 'GIF'}
                       className="w-full h-full object-cover"
                       loading="lazy"
                       onError={(e) => {
-                        // fallback to url if preview fails
-                        (e.target as HTMLImageElement).src = gif.url;
+                        const img = e.target as HTMLImageElement;
+                        if (img.src !== gif.url) img.src = gif.url;
                       }}
                     />
                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
@@ -214,7 +223,8 @@ export function GifPicker({ onSelect, onClose }: GifPickerProps) {
           )}
         </div>
 
-        <div className="p-3 border-t border-border text-center shrink-0">
+        {/* Footer */}
+        <div className="p-2 border-t border-border text-center shrink-0">
           <p className="text-xs text-muted-foreground">
             Powered by <span className="font-semibold">Tenor</span>
           </p>
