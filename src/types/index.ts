@@ -24,12 +24,23 @@ export interface Post {
   image_url?: string;
   video_url?: string;
   is_video: boolean;
+  is_long_form?: boolean;
+  is_monetized?: boolean;
+  price?: number;
+  community_id?: string;
+  media_urls?: string[];
+  media_count?: number;
   views_count: number;
   likes_count: number;
   reposts_count: number;
   replies_count: number;
   created_at: string;
+  edited_at?: string;
+  edit_history?: any[];
   user_profiles: UserProfile;
+  // boost metadata (joined from boosted_posts)
+  is_boosted?: boolean;
+  boost_type?: string; // 'rewarded_ad' | 'paid'
 }
 
 export interface TrendingTopic {

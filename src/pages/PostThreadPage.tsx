@@ -31,30 +31,29 @@ interface Reply {
 function injectPostMeta(post: Post) {
   const title = `${post.user_profiles?.username || 'Post'} on Testagram`;
   const description = post.content?.slice(0, 200) || 'View this post on Testagram';
-  const image =
-    (post.media_urls && post.media_urls.length > 0 ? post.media_urls[0] : null) ||
-    post.image_url ||
-    post.video_url ||
-    'https://testagram.site/app-icon.jpg';
+
+  // Priority: media_urls[0] > image_url > video thumbnail via CDN > app icon
+  let image = 'https://testagram.site/app-icon.jpg';
+  if (post.media_urls && post.media_urls.length > 0) {
+    image = post.media_urls[0];
+  } else if (post.image_url) {
+    image = post.image_url;
+  } else if (post.is_video && post.video_url) {
+    // For videos, try to use the video URL itself as og:image type video/mp4
+    // Many scrapers will use og:image so we keep the app icon fallback
+    image = 'https://testagram.site/app-icon.jpg';
+  }
+
   const url = `${window.location.origin}/post/${post.id}`;
 
   const setMeta = (property: string, content: string) => {
     let el = document.querySelector(`meta[property="${property}"]`) as HTMLMetaElement | null;
-    if (!el) {
-      el = document.createElement('meta');
-      el.setAttribute('property', property);
-      document.head.appendChild(el);
-    }
+    if (!el) { el = document.createElement('meta'); el.setAttribute('property', property); document.head.appendChild(el); }
     el.setAttribute('content', content);
   };
-
   const setNameMeta = (name: string, content: string) => {
     let el = document.querySelector(`meta[name="${name}"]`) as HTMLMetaElement | null;
-    if (!el) {
-      el = document.createElement('meta');
-      el.setAttribute('name', name);
-      document.head.appendChild(el);
-    }
+    if (!el) { el = document.createElement('meta'); el.setAttribute('name', name); document.head.appendChild(el); }
     el.setAttribute('content', content);
   };
 
@@ -62,12 +61,20 @@ function injectPostMeta(post: Post) {
   setMeta('og:title', title);
   setMeta('og:description', description);
   setMeta('og:image', image);
+  setMeta('og:image:width', '1200');
+  setMeta('og:image:height', '630');
   setMeta('og:url', url);
-  setMeta('og:type', 'article');
-  setNameMeta('twitter:card', 'summary_large_image');
+  setMeta('og:type', post.is_video ? 'video.other' : 'article');
+  setMeta('og:site_name', 'Testagram');
+  if (post.is_video && post.video_url) {
+    setMeta('og:video', post.video_url);
+    setMeta('og:video:type', 'video/mp4');
+  }
+  setNameMeta('twitter:card', (post.media_urls?.length || post.image_url) ? 'summary_large_image' : 'summary');
   setNameMeta('twitter:title', title);
   setNameMeta('twitter:description', description);
   setNameMeta('twitter:image', image);
+  setNameMeta('twitter:site', '@testagram');
   setNameMeta('description', description);
 }
 

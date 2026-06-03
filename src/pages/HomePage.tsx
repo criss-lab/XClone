@@ -72,7 +72,7 @@ export default function HomePage() {
 
   /**
    * Fetches a mixed feed:
-   * - "For you": mix recent + older posts for content variety
+   * - "For you": ranked by engagement score (views + likes + recency)
    * - "Following": only posts from followed users
    */
   const fetchFeed = async (pageNum: number, currentSponsored: any[]): Promise<FeedItem[]> => {
@@ -83,7 +83,6 @@ export default function HomePage() {
         .from('posts')
         .select('*, user_profiles (*)')
         .is('community_id', null)
-        .order('created_at', { ascending: false })
         .range(pageNum * PAGE_SIZE, (pageNum + 1) * PAGE_SIZE - 1);
 
       let threadsQuery = supabase
@@ -102,44 +101,60 @@ export default function HomePage() {
         const ids = followingData?.map(f => f.following_id) || [];
         if (ids.length === 0) return [];
 
-        postsQuery = postsQuery.in('user_id', ids);
+        postsQuery = postsQuery.in('user_id', ids).order('created_at', { ascending: false });
         threadsQuery = threadsQuery.in('user_id', ids);
+      } else {
+        // For You: order by recency first, then we'll re-rank by engagement
+        postsQuery = postsQuery.order('created_at', { ascending: false });
       }
 
       const [postsRes, threadsRes] = await Promise.all([postsQuery, threadsQuery]);
 
+      // Fetch boosted post IDs to annotate posts
+      const postIds = (postsRes.data || []).map(p => p.id);
+      let boostedMap: Record<string, { boost_type: string }> = {};
+      if (postIds.length > 0) {
+        const { data: boostedData } = await supabase
+          .from('boosted_posts')
+          .select('post_id, boost_type, budget')
+          .in('post_id', postIds)
+          .eq('is_active', true);
+        (boostedData || []).forEach(b => {
+          boostedMap[b.post_id] = { boost_type: b.budget > 0 ? 'paid' : 'rewarded_ad' };
+        });
+      }
+
+      // Engagement scoring: views*0.1 + likes*2 + reposts*3 + recencyScore
+      const scorePost = (p: any) => {
+        const ageHours = (Date.now() - new Date(p.created_at).getTime()) / 3600000;
+        const recencyScore = Math.max(0, 100 - ageHours * 0.5); // decays over ~200 hours
+        return (p.views_count || 0) * 0.1 + (p.likes_count || 0) * 2 + (p.reposts_count || 0) * 3 + recencyScore;
+      };
+
       const posts = (postsRes.data || []).map(p => ({
         type: 'post' as const,
-        data: p,
+        data: {
+          ...p,
+          is_boosted: !!boostedMap[p.id],
+          boost_type: boostedMap[p.id]?.boost_type,
+        },
+        _score: scorePost(p),
         _ts: new Date(p.created_at).getTime()
       }));
 
       const threads = (threadsRes.data || []).map(t => ({
         type: 'thread' as const,
         data: t,
+        _score: 0,
         _ts: new Date(t.created_at).getTime()
       }));
 
-      let combined = [...posts, ...threads].sort((a, b) => b._ts - a._ts);
-
-      // For "For You" — mix in some older content for variety (every 5th item)
-      if (activeTab === 'foryou' && pageNum === 0) {
-        const { data: popularPosts } = await supabase
-          .from('posts')
-          .select('*, user_profiles (*)')
-          .is('community_id', null)
-          .order('likes_count', { ascending: false })
-          .limit(5);
-
-        const popular = (popularPosts || []).map(p => ({
-          type: 'post' as const,
-          data: p,
-          _ts: 0 // mark as popular content
-        }));
-
-        // Interleave popular content every 5 items
-        combined.splice(5, 0, ...popular.slice(0, 2));
-        if (combined.length > 10) combined.splice(10, 0, ...popular.slice(2, 4));
+      // For You: rank by engagement score; Following: keep chronological
+      let combined = [...posts, ...threads];
+      if (activeTab === 'foryou') {
+        combined.sort((a, b) => b._score - a._score);
+      } else {
+        combined.sort((a, b) => b._ts - a._ts);
       }
 
       // Insert user suggestions block after 3rd item (first page only)

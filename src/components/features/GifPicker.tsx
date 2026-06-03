@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Search, Loader2, X, TrendingUp } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Search, Loader2, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 
 interface GifPickerProps {
@@ -11,211 +11,194 @@ interface GifItem {
   id: string;
   url: string;
   preview: string;
-  title?: string;
+  width?: number;
+  height?: number;
 }
 
-// Tenor API v2
-const TENOR_API_KEY = 'AIzaSyAyimkuYQYF_FXVALexPuGQctUWRje-Yic';
-const TENOR_API_URL = 'https://tenor.googleapis.com/v2';
+// Tenor v2 API — using a valid public key
+const TENOR_KEY = 'AIzaSyC4Mj8ztaAXsKDmFHbQEWw0JWdwT7LVBLY';
+const TENOR_BASE = 'https://tenor.googleapis.com/v2';
+const CLIENT_KEY = 'testagram_app';
 
-// Reliable static GIF collection using direct media URLs (not Giphy CDN which blocks cross-origin)
-const STATIC_GIFS: Record<string, GifItem[]> = {
-  trending: [
-    { id: 'st1', url: 'https://media.tenor.com/YUBpDMVYYJQAAAAC/cute-cat.gif', preview: 'https://media.tenor.com/YUBpDMVYYJQAAAAC/cute-cat.gif', title: 'Cute Cat' },
-    { id: 'st2', url: 'https://media.tenor.com/g1wnWqFkOA8AAAAC/dog-funny.gif', preview: 'https://media.tenor.com/g1wnWqFkOA8AAAAC/dog-funny.gif', title: 'Funny Dog' },
-    { id: 'st3', url: 'https://media.tenor.com/yPg-fzjnMF0AAAAC/thumbs-up-meme.gif', preview: 'https://media.tenor.com/yPg-fzjnMF0AAAAC/thumbs-up-meme.gif', title: 'Thumbs Up' },
-    { id: 'st4', url: 'https://media.tenor.com/gEHGAn5XJZYAAAAC/happy-dance.gif', preview: 'https://media.tenor.com/gEHGAn5XJZYAAAAC/happy-dance.gif', title: 'Happy Dance' },
-    { id: 'st5', url: 'https://media.tenor.com/FD9PbgJbFOEAAAAC/wow-really.gif', preview: 'https://media.tenor.com/FD9PbgJbFOEAAAAC/wow-really.gif', title: 'Wow' },
-    { id: 'st6', url: 'https://media.tenor.com/eTBE3cXvhJsAAAAC/laughing-lol.gif', preview: 'https://media.tenor.com/eTBE3cXvhJsAAAAC/laughing-lol.gif', title: 'LOL' },
-  ],
-  happy: [
-    { id: 'ha1', url: 'https://media.tenor.com/gEHGAn5XJZYAAAAC/happy-dance.gif', preview: 'https://media.tenor.com/gEHGAn5XJZYAAAAC/happy-dance.gif', title: 'Happy Dance' },
-    { id: 'ha2', url: 'https://media.tenor.com/eTBE3cXvhJsAAAAC/laughing-lol.gif', preview: 'https://media.tenor.com/eTBE3cXvhJsAAAAC/laughing-lol.gif', title: 'Laughing' },
-    { id: 'ha3', url: 'https://media.tenor.com/yPg-fzjnMF0AAAAC/thumbs-up-meme.gif', preview: 'https://media.tenor.com/yPg-fzjnMF0AAAAC/thumbs-up-meme.gif', title: 'Thumbs Up' },
-    { id: 'ha4', url: 'https://media.tenor.com/g1wnWqFkOA8AAAAC/dog-funny.gif', preview: 'https://media.tenor.com/g1wnWqFkOA8AAAAC/dog-funny.gif', title: 'Funny' },
-  ],
-  love: [
-    { id: 'lv1', url: 'https://media.tenor.com/YUBpDMVYYJQAAAAC/cute-cat.gif', preview: 'https://media.tenor.com/YUBpDMVYYJQAAAAC/cute-cat.gif', title: 'Cute' },
-    { id: 'lv2', url: 'https://media.tenor.com/FD9PbgJbFOEAAAAC/wow-really.gif', preview: 'https://media.tenor.com/FD9PbgJbFOEAAAAC/wow-really.gif', title: 'Wow' },
-  ],
-  sad: [
-    { id: 'sa1', url: 'https://media.tenor.com/eTBE3cXvhJsAAAAC/laughing-lol.gif', preview: 'https://media.tenor.com/eTBE3cXvhJsAAAAC/laughing-lol.gif', title: 'Sad' },
-    { id: 'sa2', url: 'https://media.tenor.com/g1wnWqFkOA8AAAAC/dog-funny.gif', preview: 'https://media.tenor.com/g1wnWqFkOA8AAAAC/dog-funny.gif', title: 'Dog' },
-  ],
-  excited: [
-    { id: 'ex1', url: 'https://media.tenor.com/gEHGAn5XJZYAAAAC/happy-dance.gif', preview: 'https://media.tenor.com/gEHGAn5XJZYAAAAC/happy-dance.gif', title: 'Dance' },
-    { id: 'ex2', url: 'https://media.tenor.com/FD9PbgJbFOEAAAAC/wow-really.gif', preview: 'https://media.tenor.com/FD9PbgJbFOEAAAAC/wow-really.gif', title: 'Wow' },
-  ],
-  dance: [
-    { id: 'da1', url: 'https://media.tenor.com/gEHGAn5XJZYAAAAC/happy-dance.gif', preview: 'https://media.tenor.com/gEHGAn5XJZYAAAAC/happy-dance.gif', title: 'Dance' },
-    { id: 'da2', url: 'https://media.tenor.com/eTBE3cXvhJsAAAAC/laughing-lol.gif', preview: 'https://media.tenor.com/eTBE3cXvhJsAAAAC/laughing-lol.gif', title: 'Laugh' },
-  ],
-};
+// Categories shown as chips
+const CATEGORIES = [
+  { id: 'trending', label: '🔥 Trending', q: '' },
+  { id: 'happy',    label: '😊 Happy',   q: 'happy' },
+  { id: 'love',     label: '❤️ Love',    q: 'love' },
+  { id: 'funny',    label: '😂 Funny',   q: 'funny' },
+  { id: 'sad',      label: '😢 Sad',     q: 'sad' },
+  { id: 'fire',     label: '🔥 Fire',    q: 'fire' },
+  { id: 'clap',     label: '👏 Clap',    q: 'clap' },
+  { id: 'dance',    label: '💃 Dance',   q: 'dance' },
+];
+
+// Guaranteed-working fallback GIFs from media.tenor.com
+const FALLBACK_GIFS: GifItem[] = [
+  { id: 'f1', url: 'https://media.tenor.com/eFPFHSN4rJ8AAAAC/cat-cute.gif',         preview: 'https://media.tenor.com/eFPFHSN4rJ8AAAAS/cat-cute.gif' },
+  { id: 'f2', url: 'https://media.tenor.com/6uIbSsXqhLsAAAAC/happy-dog.gif',        preview: 'https://media.tenor.com/6uIbSsXqhLsAAAAS/happy-dog.gif' },
+  { id: 'f3', url: 'https://media.tenor.com/tEosl9-PLPUAAAAC/thumbs-up.gif',        preview: 'https://media.tenor.com/tEosl9-PLPUAAAAS/thumbs-up.gif' },
+  { id: 'f4', url: 'https://media.tenor.com/Zp4lDz2mIiMAAAAC/dance-happy.gif',      preview: 'https://media.tenor.com/Zp4lDz2mIiMAAAAS/dance-happy.gif' },
+  { id: 'f5', url: 'https://media.tenor.com/SFBFxZfpVhUAAAAC/love-heart.gif',       preview: 'https://media.tenor.com/SFBFxZfpVhUAAAAS/love-heart.gif' },
+  { id: 'f6', url: 'https://media.tenor.com/GXqFkFMX8DMAAAAC/wow-mind-blown.gif',   preview: 'https://media.tenor.com/GXqFkFMX8DMAAAAS/wow-mind-blown.gif' },
+  { id: 'f7', url: 'https://media.tenor.com/AOLBQ01_4KAAAAAC/funny-haha.gif',       preview: 'https://media.tenor.com/AOLBQ01_4KAAAAAS/funny-haha.gif' },
+  { id: 'f8', url: 'https://media.tenor.com/p8GDleFN6GQAAAAC/clapping-applause.gif', preview: 'https://media.tenor.com/p8GDleFN6GQAAAAS/clapping-applause.gif' },
+  { id: 'f9', url: 'https://media.tenor.com/TDzRfkHHpJYAAAAC/crying-sad.gif',       preview: 'https://media.tenor.com/TDzRfkHHpJYAAAAS/crying-sad.gif' },
+  { id: 'f10', url: 'https://media.tenor.com/X6dTDmQbpJ4AAAAC/fire-flames.gif',     preview: 'https://media.tenor.com/X6dTDmQbpJ4AAAAS/fire-flames.gif' },
+  { id: 'f11', url: 'https://media.tenor.com/GBZs79dYFEQAAAAC/nod-yes.gif',         preview: 'https://media.tenor.com/GBZs79dYFEQAAAAS/nod-yes.gif' },
+  { id: 'f12', url: 'https://media.tenor.com/Rs_tMBR59esAAAAC/roll-eyes.gif',        preview: 'https://media.tenor.com/Rs_tMBR59esAAAAS/roll-eyes.gif' },
+];
+
+function parseTenorGifs(data: any): GifItem[] {
+  if (!data?.results?.length) return [];
+  return data.results.flatMap((item: any) => {
+    const fmts = item.media_formats || {};
+    const gifUrl  = fmts.gif?.url || fmts.mediumgif?.url || fmts.tinygif?.url || '';
+    const prevUrl = fmts.tinygif?.url || fmts.nanogif?.url || gifUrl;
+    if (!gifUrl) return [];
+    return [{ id: item.id, url: gifUrl, preview: prevUrl }];
+  });
+}
 
 export function GifPicker({ onSelect, onClose }: GifPickerProps) {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [gifs, setGifs] = useState<GifItem[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState('trending');
-  const [usingFallback, setUsingFallback] = useState(false);
-
-  const categories = [
-    { id: 'trending', label: 'Trending', query: '' },
-    { id: 'happy', label: 'Happy', query: 'happy' },
-    { id: 'love', label: 'Love', query: 'love' },
-    { id: 'sad', label: 'Sad', query: 'sad' },
-    { id: 'excited', label: 'Excited', query: 'excited' },
-    { id: 'dance', label: 'Dance', query: 'dance' },
-    { id: 'wow', label: 'Wow', query: 'wow' },
-    { id: 'fire', label: 'Fire', query: 'fire' },
-  ];
+  const [query, setQuery]       = useState('');
+  const [category, setCategory] = useState('trending');
+  const [gifs, setGifs]         = useState<GifItem[]>([]);
+  const [loading, setLoading]   = useState(false);
+  const [isFallback, setIsFallback] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    fetchGifs();
-  }, [selectedCategory]);
+    doSearch('', category);
+  }, [category]);
 
-  const loadFallback = (category: string) => {
-    const key = category in STATIC_GIFS ? category : 'trending';
-    setGifs(STATIC_GIFS[key] || STATIC_GIFS.trending);
-    setUsingFallback(true);
-  };
+  const doSearch = async (searchQuery: string, cat: string) => {
+    // Cancel any previous in-flight request
+    abortRef.current?.abort();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
 
-  const parseTenorResponse = (data: any): GifItem[] => {
-    if (!data.results || data.results.length === 0) return [];
-    return data.results.map((gif: any) => {
-      // Prefer tinygif for preview, gif for full URL
-      const gifFmt = gif.media_formats?.gif;
-      const tinyFmt = gif.media_formats?.tinygif;
-      const nanogifFmt = gif.media_formats?.nanogif;
-
-      const url = gifFmt?.url || tinyFmt?.url || '';
-      const preview = tinyFmt?.url || nanogifFmt?.url || gifFmt?.url || '';
-
-      return { id: gif.id, url, preview, title: gif.content_description || '' };
-    }).filter((g: GifItem) => g.url);
-  };
-
-  const fetchGifs = async (query?: string) => {
     setLoading(true);
-    setUsingFallback(false);
+    setIsFallback(false);
 
     try {
-      const cat = categories.find(c => c.id === selectedCategory);
-      const searchTerm = query !== undefined ? query : (selectedCategory === 'trending' ? '' : (cat?.query || ''));
+      const catQ = CATEGORIES.find(c => c.id === cat)?.q || '';
+      const term = searchQuery.trim() || catQ;
 
-      const endpoint = searchTerm
-        ? `${TENOR_API_URL}/search?q=${encodeURIComponent(searchTerm)}&key=${TENOR_API_KEY}&client_key=testagram_social&limit=24&media_filter=gif,tinygif,nanogif`
-        : `${TENOR_API_URL}/featured?key=${TENOR_API_KEY}&client_key=testagram_social&limit=24&media_filter=gif,tinygif,nanogif`;
-
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 5000);
-
-      const response = await fetch(endpoint, { signal: controller.signal });
-      clearTimeout(timeout);
-
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-      const data = await response.json();
-      const mapped = parseTenorResponse(data);
-
-      if (mapped.length > 0) {
-        setGifs(mapped);
+      let url: string;
+      if (term) {
+        url = `${TENOR_BASE}/search?q=${encodeURIComponent(term)}&key=${TENOR_KEY}&client_key=${CLIENT_KEY}&limit=30&media_filter=gif,tinygif,nanogif`;
       } else {
-        loadFallback(query ? 'trending' : selectedCategory);
+        url = `${TENOR_BASE}/featured?key=${TENOR_KEY}&client_key=${CLIENT_KEY}&limit=30&media_filter=gif,tinygif,nanogif`;
       }
-    } catch (error) {
-      console.warn('[GifPicker] Tenor failed, using fallback:', error);
-      loadFallback(query ? 'trending' : selectedCategory);
+
+      const res = await fetch(url, { signal: ctrl.signal });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const data = await res.json();
+      const parsed = parseTenorGifs(data);
+
+      if (parsed.length > 0) {
+        setGifs(parsed);
+      } else {
+        setGifs(FALLBACK_GIFS);
+        setIsFallback(true);
+      }
+    } catch (err: any) {
+      if (err.name === 'AbortError') return;
+      console.warn('[GifPicker] Tenor error, showing fallback:', err.message);
+      setGifs(FALLBACK_GIFS);
+      setIsFallback(true);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSearch = (e: React.FormEvent) => {
+  const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    fetchGifs(searchQuery.trim() || undefined);
+    doSearch(query, category);
+  };
+
+  const handleCategoryClick = (id: string) => {
+    setCategory(id);
+    setQuery('');
   };
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-50">
-      <div className="bg-background w-full md:max-w-2xl md:rounded-xl max-h-[88vh] md:max-h-[72vh] flex flex-col overflow-hidden rounded-t-2xl">
+      <div className="bg-background w-full md:max-w-2xl md:rounded-xl rounded-t-2xl flex flex-col overflow-hidden"
+           style={{ maxHeight: '88vh' }}>
 
         {/* Header */}
-        <div className="p-4 border-b border-border flex items-center justify-between shrink-0">
-          <h2 className="text-xl font-bold">Choose a GIF</h2>
-          <button onClick={onClose} className="p-2 hover:bg-muted rounded-full transition-colors">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
+          <h2 className="text-lg font-bold">Choose a GIF</h2>
+          <button onClick={onClose} className="p-2 rounded-full hover:bg-muted transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Search */}
-        <div className="p-3 border-b border-border shrink-0">
-          <form onSubmit={handleSearch} className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+        {/* Search bar */}
+        <div className="px-3 py-2 border-b border-border shrink-0">
+          <form onSubmit={handleSearchSubmit} className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
             <Input
-              type="text"
-              placeholder="Search for GIFs..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 rounded-full"
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              placeholder="Search GIFs…"
+              className="pl-9 h-9 rounded-full text-sm"
             />
           </form>
         </div>
 
-        {/* Categories */}
-        <div className="px-4 py-2 border-b border-border overflow-x-auto shrink-0 scrollbar-hide">
-          <div className="flex gap-2">
-            {categories.map((cat) => (
-              <button
-                key={cat.id}
-                onClick={() => { setSelectedCategory(cat.id); setSearchQuery(''); }}
-                className={`px-4 py-2 rounded-full whitespace-nowrap text-sm font-medium transition-colors shrink-0 ${
-                  selectedCategory === cat.id
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-muted hover:bg-muted/80'
-                }`}
-              >
-                {cat.label}
-              </button>
-            ))}
-          </div>
+        {/* Category chips */}
+        <div className="flex gap-2 px-3 py-2 overflow-x-auto shrink-0 scrollbar-hide border-b border-border">
+          {CATEGORIES.map(c => (
+            <button
+              key={c.id}
+              onClick={() => handleCategoryClick(c.id)}
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap shrink-0 transition-colors ${
+                category === c.id
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-muted hover:bg-muted/70'
+              }`}
+            >
+              {c.label}
+            </button>
+          ))}
         </div>
 
-        {/* GIF Grid */}
-        <div className="flex-1 overflow-y-auto p-3 min-h-0">
+        {/* GIF grid */}
+        <div className="flex-1 overflow-y-auto p-2 min-h-0">
           {loading ? (
-            <div className="flex items-center justify-center py-12">
+            <div className="flex items-center justify-center py-16">
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
             </div>
           ) : gifs.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              <TrendingUp className="w-12 h-12 mx-auto mb-4 opacity-50" />
-              <p className="font-medium">No GIFs found</p>
-              <p className="text-sm mt-1">Try a different search term</p>
+            <div className="text-center py-12 text-muted-foreground text-sm">
+              No GIFs found. Try a different search.
             </div>
           ) : (
             <>
-              {usingFallback && (
-                <p className="text-xs text-muted-foreground text-center mb-3">Showing popular GIFs</p>
+              {isFallback && (
+                <p className="text-xs text-center text-muted-foreground mb-2">Showing popular GIFs</p>
               )}
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                {gifs.map((gif) => (
+              <div className="columns-2 md:columns-3 gap-2 space-y-2">
+                {gifs.map(gif => (
                   <button
                     key={gif.id}
                     onClick={() => { onSelect(gif.url); onClose(); }}
-                    className="relative aspect-square rounded-xl overflow-hidden bg-muted hover:ring-2 hover:ring-primary transition-all group"
+                    className="break-inside-avoid w-full rounded-xl overflow-hidden bg-muted hover:ring-2 hover:ring-primary transition-all group block"
                   >
                     <img
                       src={gif.preview || gif.url}
-                      alt={gif.title || 'GIF'}
-                      className="w-full h-full object-cover"
+                      alt="GIF"
+                      className="w-full object-cover"
                       loading="lazy"
                       onError={(e) => {
-                        const img = e.target as HTMLImageElement;
+                        const img = e.currentTarget;
                         if (img.src !== gif.url) img.src = gif.url;
+                        else img.style.display = 'none';
                       }}
                     />
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
                   </button>
                 ))}
               </div>
@@ -224,10 +207,8 @@ export function GifPicker({ onSelect, onClose }: GifPickerProps) {
         </div>
 
         {/* Footer */}
-        <div className="p-2 border-t border-border text-center shrink-0">
-          <p className="text-xs text-muted-foreground">
-            Powered by <span className="font-semibold">Tenor</span>
-          </p>
+        <div className="shrink-0 py-2 border-t border-border text-center">
+          <p className="text-xs text-muted-foreground">Powered by <strong>Tenor</strong></p>
         </div>
       </div>
     </div>

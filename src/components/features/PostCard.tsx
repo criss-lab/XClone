@@ -1,4 +1,4 @@
-import { Heart, MessageCircle, Repeat2, Share, MoreHorizontal, BadgeCheck, Trash2, TrendingUp, Zap } from 'lucide-react';
+import { Heart, MessageCircle, Repeat2, Share, MoreHorizontal, BadgeCheck, Trash2, TrendingUp, Zap, Eye } from 'lucide-react';
 import { sendActivityNotification } from '@/components/layout/AuthProvider';
 import { Post } from '@/types';
 import { formatDistanceToNow } from 'date-fns';
@@ -49,6 +49,13 @@ export function PostCard({ post, onUpdate }: PostCardProps) {
     : post.image_url 
       ? [post.image_url] 
       : [];
+
+  // Determine boost label
+  const boostLabel = post.is_boosted
+    ? post.boost_type === 'paid'
+      ? 'Sponsored Content'
+      : 'Boosted Content'
+    : null;
 
   // Fetch poll if it exists
   useEffect(() => {
@@ -283,6 +290,18 @@ export function PostCard({ post, onUpdate }: PostCardProps) {
       className="border-b border-border p-4 hover:bg-muted/5 transition-colors cursor-pointer"
       onClick={handlePostClick}
     >
+      {/* Boost label */}
+      {boostLabel && (
+        <div className={`flex items-center gap-1.5 text-xs font-semibold mb-2 px-1 ${
+          boostLabel === 'Sponsored Content'
+            ? 'text-blue-500'
+            : 'text-amber-500'
+        }`}>
+          {boostLabel === 'Sponsored Content'
+            ? <><TrendingUp className="w-3 h-3" /> Sponsored Content</>
+            : <><Zap className="w-3 h-3" /> Boosted Content</>}
+        </div>
+      )}
       <div className="flex space-x-3">
         <div 
           className="w-10 h-10 rounded-full bg-muted flex-shrink-0 overflow-hidden cursor-pointer"
@@ -432,6 +451,12 @@ export function PostCard({ post, onUpdate }: PostCardProps) {
           )}
 
           {poll && <PollCard poll={poll} postId={post.id} />}
+
+          {/* Views count — visible to all users */}
+          <div className="flex items-center gap-1 mt-2 text-xs text-muted-foreground">
+            <Eye className="w-3.5 h-3.5" />
+            <span>{formatNumber(post.views_count || 0)} views</span>
+          </div>
 
           <div className="flex justify-between mt-3 max-w-md">
             <button 
