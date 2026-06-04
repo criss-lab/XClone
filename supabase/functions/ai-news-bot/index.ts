@@ -1,183 +1,169 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
 
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-
-const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-
-interface NewsArticle {
-  title: string;
-  description: string;
-  url: string;
-  source: string;
-  publishedAt: string;
-}
-
-// Fetch news from News API
-async function fetchNews(): Promise<NewsArticle[]> {
-  const NEWS_API_KEY = Deno.env.get('NEWS_API_KEY');
-  
-  if (!NEWS_API_KEY) {
-    console.log('NEWS_API_KEY not found, using demo data');
-    return getDemoNews();
-  }
-
-  try {
-    const response = await fetch(
-      `https://newsapi.org/v2/top-headlines?country=us&pageSize=5&apiKey=${NEWS_API_KEY}`
-    );
-
-    if (!response.ok) {
-      throw new Error(`News API error: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    return data.articles.map((article: any) => ({
-      title: article.title,
-      description: article.description || '',
-      url: article.url,
-      source: article.source.name,
-      publishedAt: article.publishedAt,
-    }));
-  } catch (error) {
-    console.error('Error fetching news:', error);
-    return getDemoNews();
-  }
-}
-
-function getDemoNews(): NewsArticle[] {
-  const topics = [
-    'Breaking: Major tech advancement announced today',
-    'Global markets react to latest economic data',
-    'Scientists discover potential breakthrough in renewable energy',
-    'International summit addresses climate change initiatives',
-    'Sports: Championship finals set to begin this weekend',
-  ];
-
-  return topics.map((topic, index) => ({
-    title: topic,
-    description: `Latest updates on ${topic.toLowerCase()}. Stay informed with real-time news.`,
-    url: `https://example.com/news/${index}`,
-    source: 'T News AI',
-    publishedAt: new Date().toISOString(),
-  }));
-}
-
-async function createNewsPost(article: NewsArticle, botUserId: string) {
-  // Create engaging post content
-  const content = `📰 ${article.title}\n\n${article.description}\n\n🔗 ${article.url}\n\n#Breaking #News #${article.source.replace(/\s+/g, '')}`;
-
-  const { data, error } = await supabaseAdmin
-    .from('posts')
-    .insert({
-      user_id: botUserId,
-      content: content.substring(0, 700), // Limit to 700 chars
-      created_at: new Date().toISOString(),
-    })
-    .select()
-    .single();
-
-  if (error) {
-    console.error('Error creating post:', error);
-    throw error;
-  }
-
-  return data;
-}
-
-async function getOrCreateAIBot() {
-  // Check if AI bot user exists
-  const { data: existingProfile } = await supabaseAdmin
-    .from('user_profiles')
-    .select('id')
-    .eq('username', 'NewsAI')
-    .single();
-
-  if (existingProfile) {
-    return existingProfile.id;
-  }
-
-  // Create AI bot user
-  const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
-    email: 'newsai@tsocial.app',
-    email_confirm: true,
-    user_metadata: {
-      username: 'NewsAI',
-      avatar_url: 'https://api.dicebear.com/7.x/bottts/svg?seed=NewsAI',
-    },
-  });
-
-  if (authError) {
-    console.error('Error creating auth user:', authError);
-    throw authError;
-  }
-
-  // Wait for trigger to create profile
-  await new Promise(resolve => setTimeout(resolve, 1000));
-
-  // Update profile to mark as verified
-  const { error: updateError } = await supabaseAdmin
-    .from('user_profiles')
-    .update({ 
-      verified: true,
-      bio: '🤖 AI-powered news bot bringing you breaking news and trending topics 24/7. Verified news from trusted sources.'
-    })
-    .eq('id', authUser.user.id);
-
-  if (updateError) {
-    console.error('Error updating profile:', updateError);
-  }
-
-  return authUser.user.id;
-}
-
-Deno.serve(async (req) => {
-  // Handle CORS preflight
+serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
   try {
-    console.log('AI News Bot: Starting news fetch and post...');
+    const { user_id, action } = await req.json();
 
-    // Get or create AI bot user
-    const botUserId = await getOrCreateAIBot();
-    console.log('AI Bot User ID:', botUserId);
+    const apiKey  = Deno.env.get('ONSPACE_AI_API_KEY');
+    const baseUrl = Deno.env.get('ONSPACE_AI_BASE_URL');
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+    const serviceKey  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 
-    // Fetch latest news
-    const articles = await fetchNews();
-    console.log(`Fetched ${articles.length} news articles`);
+    if (!apiKey || !baseUrl) {
+      return new Response(JSON.stringify({ error: 'AI not configured' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
 
-    // Create a post for the first article
-    const article = articles[0];
-    const post = await createNewsPost(article, botUserId);
+    const supabase = createClient(supabaseUrl, serviceKey);
 
-    console.log('Created news post:', post.id);
+    // ── Action: analyze_trending ─────────────────────────────────────────────
+    if (action === 'analyze_trending') {
+      // Fetch top trending topics
+      const { data: topics } = await supabase
+        .from('trending_topics')
+        .select('topic, category, posts_count')
+        .order('posts_count', { ascending: false })
+        .limit(10);
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        message: 'News post created successfully',
-        post_id: post.id,
-        article: article.title,
-      }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200,
-      }
-    );
-  } catch (error: any) {
-    console.error('AI News Bot error:', error);
-    return new Response(
-      JSON.stringify({
-        success: false,
-        error: error.message || 'Unknown error occurred',
-      }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 500,
-      }
-    );
+      // Fetch top posts by engagement
+      const { data: topPosts } = await supabase
+        .from('posts')
+        .select('content, views_count, likes_count, reposts_count, replies_count, created_at')
+        .is('community_id', null)
+        .order('views_count', { ascending: false })
+        .limit(20);
+
+      const topicsText = (topics || []).map(t => `"${t.topic}" (${t.posts_count} posts, ${t.category})`).join(', ');
+      const postsText = (topPosts || []).slice(0, 5).map(p =>
+        `"${p.content?.slice(0, 80)}…" [👁 ${p.views_count}, ❤️ ${p.likes_count}]`
+      ).join('\n');
+
+      const prompt = `You are a social media content analyst for Testagram, an X/Twitter-style platform.
+
+Trending topics: ${topicsText || 'Not enough data yet'}
+
+Top posts by views:
+${postsText || 'No posts yet'}
+
+Analyze the trending data and provide:
+1. **Key Trend Analysis** (2-3 sentences about what's trending)
+2. **Content Opportunities** (3 specific content ideas that would perform well right now)
+3. **Posting Tips** (2 actionable tips based on current trends)
+4. **Best Posting Time** (recommendation based on engagement patterns)
+
+Keep the response concise and actionable. Format with clear sections.`;
+
+      const res = await fetch(`${baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+        body: JSON.stringify({
+          model: 'google/gemini-3-flash-preview',
+          messages: [{ role: 'user', content: prompt }],
+        }),
+      });
+
+      if (!res.ok) throw new Error(`AI error: ${await res.text()}`);
+      const data = await res.json();
+      return new Response(JSON.stringify({
+        content: data.choices?.[0]?.message?.content ?? '',
+        topics: topics || [],
+        type: 'trending_analysis',
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    // ── Action: suggest_content ──────────────────────────────────────────────
+    if (action === 'suggest_content' && user_id) {
+      // Fetch user's recent posts to understand their style
+      const { data: userPosts } = await supabase
+        .from('posts')
+        .select('content, views_count, likes_count')
+        .eq('user_id', user_id)
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      // Fetch trending hashtags
+      const { data: hashtags } = await supabase
+        .from('hashtags')
+        .select('tag, usage_count')
+        .order('usage_count', { ascending: false })
+        .limit(10);
+
+      const userStyle = (userPosts || []).map(p => `"${p.content?.slice(0, 60)}…" [${p.likes_count} likes]`).join('\n') || 'No posts yet';
+      const trendingTags = (hashtags || []).map(h => `#${h.tag}`).join(', ');
+
+      const prompt = `You are a creative content coach for a social media creator on Testagram.
+
+Creator's recent posts:
+${userStyle}
+
+Currently trending hashtags: ${trendingTags || 'general content'}
+
+Generate 5 personalized content suggestions tailored to this creator's style and current trends. For each suggestion provide:
+- **Post idea** (the actual text they could post, 1-2 sentences, engaging)
+- **Why it works** (one sentence)
+- **Hashtags** (3-5 relevant tags)
+
+Make the suggestions feel natural, human, and likely to generate engagement.`;
+
+      const res = await fetch(`${baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+        body: JSON.stringify({
+          model: 'google/gemini-3-flash-preview',
+          messages: [{ role: 'user', content: prompt }],
+        }),
+      });
+
+      if (!res.ok) throw new Error(`AI error: ${await res.text()}`);
+      const data = await res.json();
+      return new Response(JSON.stringify({
+        content: data.choices?.[0]?.message?.content ?? '',
+        type: 'content_suggestions',
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    // ── Action: analyze_post ─────────────────────────────────────────────────
+    if (action === 'analyze_post') {
+      const { post_content } = await req.json().catch(() => ({}));
+      const prompt = `Analyze this social media post and provide brief feedback:
+
+Post: "${post_content}"
+
+Provide:
+1. **Engagement Score** (1-10 with brief reason)
+2. **Strengths** (what works well)
+3. **Improvements** (1-2 specific suggestions)
+4. **Suggested hashtags** (5 relevant tags)`;
+
+      const res = await fetch(`${baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+        body: JSON.stringify({
+          model: 'google/gemini-3-flash-preview',
+          messages: [{ role: 'user', content: prompt }],
+        }),
+      });
+
+      if (!res.ok) throw new Error(`AI error: ${await res.text()}`);
+      const data = await res.json();
+      return new Response(JSON.stringify({
+        content: data.choices?.[0]?.message?.content ?? '',
+        type: 'post_analysis',
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    return new Response(JSON.stringify({ error: 'Unknown action' }),
+      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+
+  } catch (err) {
+    console.error('[ai-news-bot]', err);
+    return new Response(JSON.stringify({ error: err instanceof Error ? err.message : 'Internal error' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
 });
