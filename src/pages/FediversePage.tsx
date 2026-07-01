@@ -3,7 +3,7 @@ import { TopBar } from '@/components/layout/TopBar';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
-import { Search, Globe, UserPlus, Users, AtSign, Loader2, CheckCircle, XCircle, ExternalLink } from 'lucide-react';
+import { Search, Globe, UserPlus, Users, AtSign, Loader2, CheckCircle, XCircle, ExternalLink, Image as ImageIcon, Play } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -20,11 +20,13 @@ interface RemoteAccount {
 }
 
 interface RemotePost {
-  id: string;
   object_url: string;
+  id?: string;
   actor_url: string;
   content: string;
+  summary?: string;
   published_at: string;
+  media_urls?: string[];
   remote_accounts?: RemoteAccount;
 }
 
@@ -54,9 +56,21 @@ export default function FediversePage() {
         body: { action: 'get_federated_feed', limit: 30 },
       });
       if (error) throw error;
-      setRemotePosts(data.posts || []);
+      
+      // Ensure posts have required fields
+      const posts = (data.posts || []).filter((post: RemotePost) => {
+        return post.object_url && post.content;
+      });
+      
+      setRemotePosts(posts);
+      
+      if (posts.length === 0) {
+        console.log('No federated posts available yet');
+      }
     } catch (err: any) {
       console.error('Federated feed error:', err);
+      toast.error('Failed to load federated feed');
+      setRemotePosts([]);
     } finally {
       setLoadingFeed(false);
     }
@@ -64,12 +78,16 @@ export default function FediversePage() {
 
   const fetchFederationStats = async () => {
     if (!user) return;
-    const [followingRes, followersRes] = await Promise.all([
-      supabase.from('federated_following').select('*').eq('local_user_id', user.id),
-      supabase.from('federated_followers').select('*').eq('local_user_id', user.id),
-    ]);
-    setFederatedFollowing(followingRes.data || []);
-    setFederatedFollowers(followersRes.data || []);
+    try {
+      const [followingRes, followersRes] = await Promise.all([
+        supabase.from('federated_following').select('*').eq('local_user_id', user.id),
+        supabase.from('federated_followers').select('*').eq('local_user_id', user.id),
+      ]);
+      setFederatedFollowing(followingRes.data || []);
+      setFederatedFollowers(followersRes.data || []);
+    } catch (err: any) {
+      console.error('Federation stats error:', err);
+    }
   };
 
   const handleSearch = async () => {
@@ -122,6 +140,31 @@ export default function FediversePage() {
 
   const isFollowing = (actorUrl: string) =>
     federatedFollowing.some(f => f.remote_actor_url === actorUrl);
+
+  // Helper to render media attachments
+  const renderMediaAttachments = (mediaUrls?: string[]) => {
+    if (!mediaUrls || mediaUrls.length === 0) return null;
+    
+    return (
+      <div className="mt-3 grid gap-2">
+        {mediaUrls.slice(0, 4).map((url, idx) => {
+          const isVideo = url.includes('.mp4') || url.includes('.webm');
+          return (
+            <div key={idx} className="relative bg-muted rounded-lg overflow-hidden aspect-video">
+              {isVideo ? (
+                <>
+                  <video src={url} className="w-full h-full object-cover" />
+                  <Play className="absolute inset-0 m-auto w-8 h-8 text-white opacity-70" />
+                </>
+              ) : (
+                <img src={url} alt={`Attachment ${idx + 1}`} className="w-full h-full object-cover" />
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-background pb-20">
@@ -189,7 +232,7 @@ export default function FediversePage() {
             ) : (
               <div className="space-y-3">
                 {remotePosts.map(post => (
-                  <div key={post.id} className="bg-card border border-border rounded-2xl p-4">
+                  <div key={post.object_url} className="bg-card border border-border rounded-2xl p-4">
                     <div className="flex items-start gap-3">
                       <div className="w-10 h-10 rounded-full bg-muted overflow-hidden shrink-0">
                         {post.remote_accounts?.avatar_url ? (
@@ -203,10 +246,10 @@ export default function FediversePage() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 mb-1 flex-wrap">
                           <span className="font-bold text-sm">
-                            {post.remote_accounts?.display_name || post.remote_accounts?.username}
+                            {post.remote_accounts?.display_name || post.remote_accounts?.username || 'Unknown User'}
                           </span>
                           <span className="text-xs text-muted-foreground">
-                            @{post.remote_accounts?.username}@{post.remote_accounts?.domain}
+                            @{post.remote_accounts?.username || 'user'}@{post.remote_accounts?.domain || 'unknown'}
                           </span>
                           <div className="flex items-center gap-1 px-1.5 py-0.5 bg-purple-500/10 rounded-full ml-auto">
                             <Globe className="w-3 h-3 text-purple-500" />
@@ -214,9 +257,13 @@ export default function FediversePage() {
                           </div>
                         </div>
                         <div
-                          className="text-sm leading-relaxed"
+                          className="text-sm leading-relaxed prose prose-sm dark:prose-invert max-w-none"
                           dangerouslySetInnerHTML={{ __html: post.content || '' }}
                         />
+                        
+                        {/* Media Attachments */}
+                        {renderMediaAttachments(post.media_urls)}
+                        
                         {post.published_at && (
                           <p className="text-xs text-muted-foreground mt-1.5">
                             {new Date(post.published_at).toLocaleDateString()}
